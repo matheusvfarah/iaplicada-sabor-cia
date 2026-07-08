@@ -391,15 +391,17 @@ function GeneralDashboard() {
               <TrendingDown className="size-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="h-[220px] w-full">
+              <div className="h-[260px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={cancellationByPlatform}
                       dataKey="value"
                       nameKey="name"
-                      innerRadius={50}
-                      outerRadius={80}
+                      cx="50%"
+                      cy="45%"
+                      innerRadius={45}
+                      outerRadius={85}
                       paddingAngle={2}
                       stroke="var(--card)"
                     >
