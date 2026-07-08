@@ -126,7 +126,7 @@ function UnitDashboard() {
       setOrders((prev) => {
         const next = generateOrders(unit.id + Date.now(), 1)[0];
         return [
-          { ...next, id: `#${9500 + Math.floor(Math.random() * 500)}` },
+          { ...next, id: `#live-${Date.now()}` },
           ...prev.slice(0, 19),
         ];
       });
