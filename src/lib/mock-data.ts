@@ -136,7 +136,7 @@ export function generateOrders(unitId: string, count = 24): Order[] {
     const value = Math.round((30 + rand() * 180) * 100) / 100;
     const customer = NAMES[Math.floor(rand() * NAMES.length)];
     return {
-      id: `#${9000 + i + Math.floor(rand() * 400)}`,
+      id: `#${9000 + i}-${Math.floor(rand() * 9999)}`,
       createdAt: new Date(now - i * 7 * 60_000).toISOString(),
       value,
       platform,
