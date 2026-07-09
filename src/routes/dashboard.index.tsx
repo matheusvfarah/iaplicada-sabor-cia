@@ -13,16 +13,32 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Download, FileText, Flame, Store, TrendingDown, Trophy } from "lucide-react";
+import {
+  ChevronDown,
+  Download,
+  FileText,
+  Flame,
+  Store,
+  TrendingDown,
+  Trophy,
+} from "lucide-react";
 import { TopBar } from "@/components/top-bar";
 import { AlertsBadge } from "@/components/alerts-badge";
 import { PeriodFilter } from "@/components/period-filter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/lib/supabase";
 import { CURRENCY } from "@/lib/currency";
 import { exportCSV, exportPDF } from "@/lib/export";
+import { isUnidadeAberta, useMinuteTick, type HorarioFuncionamento } from "@/lib/unidade-status";
+import { cn } from "@/lib/utils";
 import {
   parseDateOnly,
   periodRange,
@@ -75,6 +91,8 @@ type CancelamentoPlataforma = {
   taxa: number;
 };
 
+type UnidadeStatus = HorarioFuncionamento & { id: number; status: "ativa" | "inativa" };
+
 const CHART_COLORS = [
   "var(--chart-1)",
   "var(--chart-2)",
@@ -92,6 +110,22 @@ function GeneralDashboard() {
   const [serieFaturamento, setSerieFaturamento] = useState<FaturamentoSerie[]>([]);
   const [cancelamento, setCancelamento] = useState<CancelamentoPlataforma[]>([]);
   const [granularidade, setGranularidade] = useState<Granularidade>("month");
+  const [unidadesStatus, setUnidadesStatus] = useState<UnidadeStatus[]>([]);
+
+  useEffect(() => {
+    supabase
+      .from("unidades")
+      .select("id, status, horario_abertura, horario_fechamento")
+      .then(({ data }) => setUnidadesStatus((data as UnidadeStatus[]) ?? []));
+  }, []);
+  useMinuteTick();
+
+  const abertaFor = (id: number) => {
+    const u = unidadesStatus.find((u) => u.id === id);
+    return !!u && u.status === "ativa" && isUnidadeAberta(u);
+  };
+  const totalUnidades = unidadesStatus.length;
+  const unidadesAbertas = unidadesStatus.filter((u) => u.status === "ativa" && isUnidadeAberta(u)).length;
 
   useEffect(() => {
     if (period === "custom" && (!customRange.inicio || !customRange.fim)) return;
@@ -217,33 +251,16 @@ function GeneralDashboard() {
         subtitle={`${kpisUnidades.length} unidades ativas na rede`}
         actions={
           <>
-            <Button
-              variant="outline"
-              size="sm"
-              className="hidden sm:inline-flex"
-              onClick={handleExportCSV}
-              disabled={loading || ranking.length === 0}
+            <span
+              className={cn(
+                "hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium sm:inline-flex",
+                unidadesAbertas > 0
+                  ? "bg-success-tint text-success-tint-foreground"
+                  : "bg-secondary text-muted-foreground",
+              )}
             >
-              <Download className="mr-1.5 size-3.5" />
-              CSV
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="hidden sm:inline-flex"
-              onClick={handleExportPDF}
-              disabled={loading}
-            >
-              <FileText className="mr-1.5 size-3.5" />
-              PDF
-            </Button>
-            <div className="flex size-2 items-center justify-center">
-              <span className="relative flex size-2">
-                <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-60" />
-                <span className="relative inline-flex size-2 rounded-full bg-success" />
-              </span>
-            </div>
-            <span className="hidden text-[11px] text-muted-foreground sm:inline">Live</span>
+              {unidadesAbertas} de {totalUnidades} unidades abertas
+            </span>
             <AlertsBadge />
           </>
         }
@@ -261,12 +278,38 @@ function GeneralDashboard() {
             </p>
           </div>
 
-          <PeriodFilter
-            period={period}
-            onPeriodChange={setPeriod}
-            customRange={customRange}
-            onCustomRangeChange={setCustomRange}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <PeriodFilter
+              period={period}
+              onPeriodChange={setPeriod}
+              customRange={customRange}
+              onCustomRangeChange={setCustomRange}
+            />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || ranking.length === 0}
+                  className="gap-1.5"
+                >
+                  <Download className="size-3.5" />
+                  Exportar
+                  <ChevronDown className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleExportCSV}>
+                  <FileText className="mr-2 size-3.5" />
+                  CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportPDF}>
+                  <FileText className="mr-2 size-3.5" />
+                  PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
         {loading ? (
@@ -394,15 +437,28 @@ function GeneralDashboard() {
                   ) : (
                     ranking.map((u, i) => {
                       const pct = (u.receita / ranking[0].receita) * 100;
+                      const aberta = abertaFor(u.unidade_id);
                       return (
                         <div key={u.unidade_id} className="space-y-1.5">
                           <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
                             <span className="w-5 font-mono text-xs text-muted-foreground">
                               {String(i + 1).padStart(2, "0")}
                             </span>
-                            <p className="min-w-0 truncate text-sm font-semibold">
-                              {u.unidade_nome}
-                            </p>
+                            <div className="flex min-w-0 items-center gap-2">
+                              <p className="min-w-0 truncate text-sm font-semibold">
+                                {u.unidade_nome}
+                              </p>
+                              <span
+                                className={cn(
+                                  "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                                  aberta
+                                    ? "bg-success-tint text-success-tint-foreground"
+                                    : "bg-secondary text-muted-foreground",
+                                )}
+                              >
+                                {aberta ? "Aberta" : "Fechada"}
+                              </span>
+                            </div>
                             <p className="shrink-0 text-right font-mono text-sm font-semibold tabular-nums">
                               {CURRENCY.format(u.receita)}
                             </p>
