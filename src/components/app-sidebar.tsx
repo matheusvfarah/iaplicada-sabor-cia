@@ -1,4 +1,5 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { LayoutDashboard, Store, LogOut, Circle } from "lucide-react";
 import {
   Sidebar,
@@ -13,26 +14,32 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { BrandLogo } from "@/components/brand-logo";
-import { UNITS } from "@/lib/mock-data";
-import { clearSession, useSession } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
+import { signOut, useSession } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 
-const statusColor: Record<string, string> = {
-  operational: "text-emerald-500",
-  rush: "text-primary",
-  idle: "text-muted-foreground",
-  offline: "text-destructive",
+type Unidade = {
+  id: number;
+  nome: string;
+  status: "ativa" | "inativa";
 };
 
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { session } = useSession();
   const navigate = useNavigate();
+  const [unidades, setUnidades] = useState<Unidade[]>([]);
 
-  const isAdmin = session?.role === "admin";
-  const visibleUnits = isAdmin
-    ? UNITS
-    : UNITS.filter((u) => u.id === session?.unitId);
+  const isAdmin = session?.profile.role === "gestor_geral";
+
+  useEffect(() => {
+    if (!session) return;
+    supabase
+      .from("unidades")
+      .select("id, nome, status")
+      .order("nome")
+      .then(({ data }) => setUnidades(data ?? []));
+  }, [session]);
 
   const isActive = (path: string) => pathname === path;
 
@@ -70,21 +77,20 @@ export function AppSidebar() {
           <SidebarGroupLabel>Unidades</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {visibleUnits.map((u) => (
+              {unidades.map((u) => (
                 <SidebarMenuItem key={u.id}>
                   <SidebarMenuButton
                     asChild
                     isActive={pathname === `/dashboard/unit/${u.id}`}
-                    tooltip={u.name}
+                    tooltip={u.nome}
                   >
-                    <Link
-                      to="/dashboard/unit/$unitId"
-                      params={{ unitId: u.id }}
-                    >
+                    <Link to="/dashboard/unit/$unitId" params={{ unitId: String(u.id) }}>
                       <Store />
-                      <span className="truncate">{u.name}</span>
+                      <span className="truncate">{u.nome}</span>
                       <Circle
-                        className={`ml-auto size-2 fill-current ${statusColor[u.status]}`}
+                        className={`ml-auto size-2 fill-current ${
+                          u.status === "ativa" ? "text-emerald-500" : "text-muted-foreground"
+                        }`}
                       />
                     </Link>
                   </SidebarMenuButton>
@@ -97,10 +103,10 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-sidebar-border">
         <div className="flex items-center gap-2 px-2 py-2">
           <div className="grid size-8 shrink-0 place-items-center rounded-md bg-sidebar-accent font-mono text-xs font-semibold">
-            {(session?.name ?? "??").slice(0, 2).toUpperCase()}
+            {(session?.profile.nome ?? "??").slice(0, 2).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-            <p className="truncate text-xs font-semibold">{session?.name}</p>
+            <p className="truncate text-xs font-semibold">{session?.profile.nome}</p>
             <p className="truncate text-[10px] text-muted-foreground">
               {isAdmin ? "Gestor de Rede" : "Operador de Unidade"}
             </p>
@@ -109,8 +115,8 @@ export function AppSidebar() {
             variant="ghost"
             size="icon"
             className="size-8 shrink-0 group-data-[collapsible=icon]:hidden"
-            onClick={() => {
-              clearSession();
+            onClick={async () => {
+              await signOut();
               navigate({ to: "/login" });
             }}
             aria-label="Sair"

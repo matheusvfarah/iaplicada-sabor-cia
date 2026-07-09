@@ -1,34 +1,28 @@
 import { useEffect, useState } from "react";
+import { supabase } from "./supabase";
 
-export type Role = "admin" | "unit";
+export type Role = "gestor_geral" | "gerente";
+
+export type Profile = {
+  id: string;
+  nome: string;
+  role: Role;
+  unidade_id: number | null;
+};
 
 export type Session = {
   email: string;
-  role: Role;
-  unitId?: string;
-  name: string;
+  profile: Profile;
 };
 
-const KEY = "sabor-cia-session";
-
-export function getSession(): Session | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as Session) : null;
-  } catch {
-    return null;
-  }
-}
-
-export function saveSession(s: Session) {
-  window.localStorage.setItem(KEY, JSON.stringify(s));
-  window.dispatchEvent(new Event("sabor-cia:auth"));
-}
-
-export function clearSession() {
-  window.localStorage.removeItem(KEY);
-  window.dispatchEvent(new Event("sabor-cia:auth"));
+async function fetchProfile(userId: string): Promise<Profile | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, nome, role, unidade_id")
+    .eq("id", userId)
+    .single();
+  if (error || !data) return null;
+  return data;
 }
 
 export function useSession() {
@@ -36,16 +30,53 @@ export function useSession() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setSession(getSession());
-    setReady(true);
-    const onChange = () => setSession(getSession());
-    window.addEventListener("sabor-cia:auth", onChange);
-    window.addEventListener("storage", onChange);
+    let active = true;
+
+    async function resolve(user: { id: string; email?: string } | undefined) {
+      if (!user?.email) {
+        if (active) {
+          setSession(null);
+          setReady(true);
+        }
+        return;
+      }
+      const profile = await fetchProfile(user.id);
+      if (!active) return;
+      setSession(profile ? { email: user.email, profile } : null);
+      setReady(true);
+    }
+
+    supabase.auth.getSession().then(({ data }) => resolve(data.session?.user));
+
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, newSession) =>
+      resolve(newSession?.user),
+    );
+
     return () => {
-      window.removeEventListener("sabor-cia:auth", onChange);
-      window.removeEventListener("storage", onChange);
+      active = false;
+      subscription.subscription.unsubscribe();
     };
   }, []);
 
   return { session, ready };
+}
+
+export async function signIn(email: string, password: string): Promise<Session> {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (error) throw error;
+
+  const profile = await fetchProfile(data.user.id);
+  if (!profile) {
+    await supabase.auth.signOut();
+    throw new Error("Usuário autenticado, mas sem perfil configurado.");
+  }
+
+  return { email: data.user.email!, profile };
+}
+
+export async function signOut() {
+  await supabase.auth.signOut();
 }

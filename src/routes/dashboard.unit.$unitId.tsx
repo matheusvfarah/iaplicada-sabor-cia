@@ -1,21 +1,10 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import {
-  Download,
-  FileText,
-  Star,
-  Target,
-  Trophy,
-} from "lucide-react";
+import { Download, FileText, Star, Target, Trophy } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -25,30 +14,80 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  CURRENCY,
-  CURRENCY_FULL,
-  generateOrders,
-  getUnitById,
-  type Order,
-  type OrderStatus,
-  type Platform,
-} from "@/lib/mock-data";
+import { supabase } from "@/lib/supabase";
+import { CURRENCY, CURRENCY_FULL } from "@/lib/currency";
 import { exportCSV, exportPDF } from "@/lib/export";
 
+type Plataforma = "ifood" | "rappi" | "proprio";
+type StatusPedido = "recebido" | "preparando" | "entregue" | "cancelado";
+
+type Pedido = {
+  id: number;
+  unidade_id: number;
+  valor: number;
+  plataforma: Plataforma;
+  status: StatusPedido;
+  data_pedido: string;
+};
+
+type KpiUnidade = {
+  receita_mes: number;
+  meta_receita: number | null;
+  pct_meta: number | null;
+  nota_media: number | null;
+  total_avaliacoes: number;
+};
+
+const PLATFORM_LABEL: Record<Plataforma, string> = {
+  ifood: "iFood",
+  rappi: "Rappi",
+  proprio: "Próprio",
+};
+
+const platformDot: Record<Plataforma, string> = {
+  ifood: "bg-red-500",
+  rappi: "bg-orange-400",
+  proprio: "bg-primary",
+};
+
+const statusBadge: Record<StatusPedido, { label: string; className: string }> = {
+  recebido: {
+    label: "Recebido",
+    className: "bg-primary/10 text-primary border-primary/20",
+  },
+  preparando: {
+    label: "Em preparo",
+    className: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+  },
+  entregue: {
+    label: "Entregue",
+    className: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+  },
+  cancelado: {
+    label: "Cancelado",
+    className: "bg-destructive/10 text-destructive border-destructive/20",
+  },
+};
+
 export const Route = createFileRoute("/dashboard/unit/$unitId")({
-  loader: ({ params }) => {
-    const unit = getUnitById(params.unitId);
-    if (!unit) throw notFound();
-    return { unit };
+  loader: async ({ params }) => {
+    const unidadeId = Number(params.unitId);
+    if (!Number.isFinite(unidadeId)) throw notFound();
+    const { data, error } = await supabase
+      .from("unidades")
+      .select("id, nome")
+      .eq("id", unidadeId)
+      .single();
+    if (error || !data) throw notFound();
+    return { unit: data };
   },
   head: ({ loaderData }) => ({
     meta: loaderData
       ? [
-          { title: `${loaderData.unit.name} — Sabor & Cia` },
+          { title: `${loaderData.unit.nome} — Sabor & Cia` },
           {
             name: "description",
-            content: `Operação em tempo real da unidade ${loaderData.unit.name} — pedidos, receita vs meta e avaliações.`,
+            content: `Operação em tempo real da unidade ${loaderData.unit.nome} — pedidos, receita vs meta e avaliações.`,
           },
         ]
       : [{ title: "Unidade — Sabor & Cia" }],
@@ -59,9 +98,7 @@ export const Route = createFileRoute("/dashboard/unit/$unitId")({
         <p className="font-mono text-xs uppercase tracking-widest text-primary">
           Unidade não encontrada
         </p>
-        <h2 className="mt-2 font-display text-2xl font-bold">
-          Cozinha não faz parte da rede
-        </h2>
+        <h2 className="mt-2 font-display text-2xl font-bold">Cozinha não faz parte da rede</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           Verifique o link ou volte para o dashboard geral.
         </p>
@@ -74,101 +111,93 @@ export const Route = createFileRoute("/dashboard/unit/$unitId")({
   component: UnitDashboard,
 });
 
-const platformDot: Record<Platform, string> = {
-  iFood: "bg-red-500",
-  Rappi: "bg-orange-400",
-  UberEats: "bg-emerald-500",
-  Próprio: "bg-primary",
-};
-
-const statusBadge: Record<OrderStatus, { label: string; className: string }> = {
-  novo: {
-    label: "Novo",
-    className: "bg-primary/10 text-primary border-primary/20",
-  },
-  preparo: {
-    label: "Em preparo",
-    className: "bg-amber-500/10 text-amber-500 border-amber-500/20",
-  },
-  entrega: {
-    label: "Saiu p/ entrega",
-    className: "bg-sky-500/10 text-sky-500 border-sky-500/20",
-  },
-  concluido: {
-    label: "Concluído",
-    className: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
-  },
-  cancelado: {
-    label: "Cancelado",
-    className: "bg-destructive/10 text-destructive border-destructive/20",
-  },
-};
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
 
 function UnitDashboard() {
   const { unit } = Route.useLoaderData();
   const [loading, setLoading] = useState(true);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<Pedido[]>([]);
+  const [kpis, setKpis] = useState<KpiUnidade | null>(null);
 
-  // Simulated live loading
   useEffect(() => {
+    let active = true;
     setLoading(true);
-    const t = setTimeout(() => {
-      setOrders(generateOrders(unit.id, 20));
+
+    Promise.all([
+      supabase
+        .from("pedidos")
+        .select("id, unidade_id, valor, plataforma, status, data_pedido")
+        .eq("unidade_id", unit.id)
+        .gte("data_pedido", startOfToday())
+        .order("data_pedido", { ascending: false }),
+      supabase.rpc("rpc_kpis_unidade", { p_unidade: unit.id }),
+    ]).then(([ordersRes, kpisRes]) => {
+      if (!active) return;
+      setOrders(ordersRes.data ?? []);
+      setKpis(kpisRes.data?.[0] ?? null);
       setLoading(false);
-    }, 450);
-    return () => clearTimeout(t);
+    });
+
+    const channel = supabase
+      .channel(`pedidos-unidade-${unit.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pedidos", filter: `unidade_id=eq.${unit.id}` },
+        (payload) => {
+          const row = payload.new as Pedido;
+          setOrders((prev) => {
+            const withoutRow = prev.filter((o) => o.id !== row.id);
+            return [row, ...withoutRow].sort(
+              (a, b) => new Date(b.data_pedido).getTime() - new Date(a.data_pedido).getTime(),
+            );
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      active = false;
+      supabase.removeChannel(channel);
+    };
   }, [unit.id]);
 
-  // Simulated realtime tick: rotate a new order in every 12s
-  useEffect(() => {
-    if (loading) return;
-    const interval = setInterval(() => {
-      setOrders((prev) => {
-        const next = generateOrders(unit.id + Date.now(), 1)[0];
-        return [
-          { ...next, id: `#live-${Date.now()}` },
-          ...prev.slice(0, 19),
-        ];
-      });
-    }, 12000);
-    return () => clearInterval(interval);
-  }, [loading, unit.id]);
+  const top5 = useMemo(() => [...orders].sort((a, b) => b.valor - a.valor).slice(0, 5), [orders]);
 
-  const top5 = useMemo(
-    () => [...orders].sort((a, b) => b.value - a.value).slice(0, 5),
-    [orders],
-  );
-
-  const goalPct = Math.min(100, (unit.revenueMonth / unit.goalMonth) * 100);
+  const goalPct =
+    kpis?.meta_receita && kpis.meta_receita > 0
+      ? Math.min(100, (kpis.receita_mes / kpis.meta_receita) * 100)
+      : 0;
 
   const handleExportCSV = () => {
     exportCSV(
-      `sabor-cia-${unit.id}-pedidos`,
+      `sabor-cia-unidade-${unit.id}-pedidos`,
       orders.map((o) => ({
         id: o.id,
-        criado_em: o.createdAt,
-        cliente: o.customer,
-        plataforma: o.platform,
+        criado_em: o.data_pedido,
+        plataforma: PLATFORM_LABEL[o.plataforma],
         status: o.status,
-        itens: o.items,
-        valor: o.value,
+        valor: o.valor,
       })),
     );
   };
 
   const handleExportPDF = () => {
     exportPDF(
-      `sabor-cia-${unit.id}`,
-      `Sabor & Cia — ${unit.name}`,
-      JSON.stringify({ unit, orders }, null, 2),
+      `sabor-cia-unidade-${unit.id}`,
+      `Sabor & Cia — ${unit.nome}`,
+      JSON.stringify({ unit, kpis, orders }, null, 2),
     );
   };
 
   return (
     <>
       <TopBar
-        title={unit.name}
-        subtitle={`${unit.city} • operação em tempo real`}
+        title={unit.nome}
+        subtitle="Operação em tempo real"
         actions={
           <>
             <Button
@@ -176,6 +205,7 @@ function UnitDashboard() {
               size="sm"
               className="hidden sm:inline-flex"
               onClick={handleExportCSV}
+              disabled={loading || orders.length === 0}
             >
               <Download className="mr-1.5 size-3.5" />
               CSV
@@ -185,6 +215,7 @@ function UnitDashboard() {
               size="sm"
               className="hidden sm:inline-flex"
               onClick={handleExportPDF}
+              disabled={loading}
             >
               <FileText className="mr-1.5 size-3.5" />
               PDF
@@ -211,21 +242,27 @@ function UnitDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="font-display text-3xl font-bold">
-                {CURRENCY.format(unit.revenueMonth)}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Meta: {CURRENCY.format(unit.goalMonth)}
-              </p>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface">
-                <div
-                  className="h-full rounded-full bg-primary transition-all"
-                  style={{ width: `${goalPct}%` }}
-                />
-              </div>
-              <p className="mt-1 text-right font-mono text-[10px] text-primary">
-                {goalPct.toFixed(1)}% da meta
-              </p>
+              {loading ? (
+                <Skeleton className="h-16 w-full" />
+              ) : (
+                <>
+                  <p className="font-display text-3xl font-bold">
+                    {CURRENCY.format(kpis?.receita_mes ?? 0)}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Meta: {CURRENCY.format(kpis?.meta_receita ?? 0)}
+                  </p>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all"
+                      style={{ width: `${goalPct}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-right font-mono text-[10px] text-primary">
+                    {goalPct.toFixed(1)}% da meta
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -237,26 +274,32 @@ function UnitDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-baseline gap-2">
-                <p className="font-display text-3xl font-bold">
-                  {unit.rating.toFixed(1)}
-                </p>
-                <div className="flex">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Star
-                      key={i}
-                      className={`size-3.5 ${
-                        i < Math.round(unit.rating)
-                          ? "fill-primary text-primary"
-                          : "text-muted-foreground/30"
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                Baseado em {(unit.ordersMonth * 0.32).toFixed(0)} avaliações
-              </p>
+              {loading ? (
+                <Skeleton className="h-16 w-full" />
+              ) : (
+                <>
+                  <div className="flex items-baseline gap-2">
+                    <p className="font-display text-3xl font-bold">
+                      {kpis?.nota_media ? kpis.nota_media.toFixed(1) : "—"}
+                    </p>
+                    <div className="flex">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`size-3.5 ${
+                            kpis?.nota_media && i < Math.round(kpis.nota_media)
+                              ? "fill-primary text-primary"
+                              : "text-muted-foreground/30"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Baseado em {kpis?.total_avaliacoes ?? 0} avaliações
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -268,11 +311,11 @@ function UnitDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="font-display text-3xl font-bold">
-                {loading ? "—" : orders.length}
-              </p>
+              <p className="font-display text-3xl font-bold">{loading ? "—" : orders.length}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Ticket médio {CURRENCY.format(unit.avgTicket)}
+                {orders.length > 0
+                  ? `Ticket médio ${CURRENCY.format(orders.reduce((s, o) => s + o.valor, 0) / orders.length)}`
+                  : "Aguardando pedidos"}
               </p>
             </CardContent>
           </Card>
@@ -283,18 +326,16 @@ function UnitDashboard() {
           <Card className="lg:col-span-3">
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <div>
-                <CardTitle className="font-display text-base">
-                  Pedidos do dia
-                </CardTitle>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Atualizado em tempo real
-                </p>
+                <CardTitle className="font-display text-base">Pedidos do dia</CardTitle>
+                <p className="mt-1 text-xs text-muted-foreground">Atualizado em tempo real</p>
               </div>
               <Badge
                 variant="outline"
                 className="border-emerald-500/20 bg-emerald-500/10 text-[10px] text-emerald-500"
               >
-                {loading ? "…" : `${orders.filter((o) => o.status === "novo" || o.status === "preparo").length} ativos`}
+                {loading
+                  ? "…"
+                  : `${orders.filter((o) => o.status === "recebido" || o.status === "preparando").length} ativos`}
               </Badge>
             </CardHeader>
             <CardContent className="p-0">
@@ -331,15 +372,13 @@ function UnitDashboard() {
                     <TableBody>
                       {orders.map((o) => (
                         <TableRow key={o.id} className="text-sm">
-                          <TableCell className="font-mono text-xs">
-                            {o.id}
-                          </TableCell>
+                          <TableCell className="font-mono text-xs">#{o.id}</TableCell>
                           <TableCell>
                             <span className="flex items-center gap-2">
                               <span
-                                className={`size-1.5 rounded-full ${platformDot[o.platform]}`}
+                                className={`size-1.5 rounded-full ${platformDot[o.plataforma]}`}
                               />
-                              {o.platform}
+                              {PLATFORM_LABEL[o.plataforma]}
                             </span>
                           </TableCell>
                           <TableCell>
@@ -351,7 +390,7 @@ function UnitDashboard() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right font-mono font-semibold">
-                            {CURRENCY_FULL.format(o.value)}
+                            {CURRENCY_FULL.format(o.valor)}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -364,9 +403,7 @@ function UnitDashboard() {
 
           <Card className="lg:col-span-2">
             <CardHeader>
-              <CardTitle className="font-display text-base">
-                Top 5 pedidos por valor
-              </CardTitle>
+              <CardTitle className="font-display text-base">Top 5 pedidos por valor</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {loading ? (
@@ -385,15 +422,13 @@ function UnitDashboard() {
                       {i + 1}
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">
-                        {o.customer}
-                      </p>
+                      <p className="truncate text-sm font-semibold">Pedido #{o.id}</p>
                       <p className="text-[10px] text-muted-foreground">
-                        {o.platform} • {o.items} itens
+                        {PLATFORM_LABEL[o.plataforma]}
                       </p>
                     </div>
                     <p className="shrink-0 font-mono text-sm font-semibold">
-                      {CURRENCY_FULL.format(o.value)}
+                      {CURRENCY_FULL.format(o.valor)}
                     </p>
                   </div>
                 ))

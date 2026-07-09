@@ -4,8 +4,7 @@ import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { saveSession, type Role } from "@/lib/auth";
-import { UNITS } from "@/lib/mock-data";
+import { signIn } from "@/lib/auth";
 import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
@@ -25,12 +24,10 @@ function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("admin");
-  const [unitId, setUnitId] = useState(UNITS[0].id);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (!email || !password) {
@@ -38,27 +35,22 @@ function LoginPage() {
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      const name =
-        email.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (c) =>
-          c.toUpperCase(),
-        ) || "Operador";
-      saveSession({
-        email,
-        role,
-        unitId: role === "unit" ? unitId : undefined,
-        name,
-      });
-      if (role === "admin") {
+    try {
+      const session = await signIn(email, password);
+      if (session.profile.role === "gestor_geral") {
         navigate({ to: "/dashboard", replace: true });
       } else {
         navigate({
           to: "/dashboard/unit/$unitId",
-          params: { unitId },
+          params: { unitId: String(session.profile.unidade_id) },
           replace: true,
         });
       }
-    }, 500);
+    } catch {
+      setError("E-mail ou senha inválidos.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -73,9 +65,7 @@ function LoginPage() {
         <div className="mb-8 flex flex-col items-center gap-4">
           <BrandLogo size="lg" showText={false} />
           <div className="text-center">
-            <h1 className="font-display text-2xl font-bold tracking-tight">
-              Sabor & Cia
-            </h1>
+            <h1 className="font-display text-2xl font-bold tracking-tight">Sabor & Cia</h1>
             <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
               Acesso Operacional
             </p>
@@ -100,10 +90,7 @@ function LoginPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label
-              htmlFor="password"
-              className="text-xs uppercase tracking-wider"
-            >
+            <Label htmlFor="password" className="text-xs uppercase tracking-wider">
               Senha
             </Label>
             <Input
@@ -116,63 +103,9 @@ function LoginPage() {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-xs uppercase tracking-wider">Perfil</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {(["admin", "unit"] as Role[]).map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setRole(r)}
-                  className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
-                    role === r
-                      ? "border-primary bg-primary/10"
-                      : "border-border bg-surface hover:bg-surface-hover"
-                  }`}
-                >
-                  <p
-                    className={`text-sm font-semibold ${role === r ? "text-primary" : "text-foreground"}`}
-                  >
-                    {r === "admin" ? "Gestor de Rede" : "Operador Unidade"}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {r === "admin"
-                      ? "Todas as cozinhas"
-                      : "Somente a unidade"}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </div>
+          {error && <p className="text-xs text-destructive">{error}</p>}
 
-          {role === "unit" && (
-            <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider">
-                Unidade
-              </Label>
-              <select
-                value={unitId}
-                onChange={(e) => setUnitId(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                {UNITS.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} — {u.city}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {error && (
-            <p className="text-xs text-destructive">{error}</p>
-          )}
-
-          <Button
-            type="submit"
-            className="h-11 w-full text-sm font-semibold"
-            disabled={loading}
-          >
+          <Button type="submit" className="h-11 w-full text-sm font-semibold" disabled={loading}>
             {loading ? (
               <>
                 <Loader2 className="mr-2 size-4 animate-spin" />
@@ -185,8 +118,6 @@ function LoginPage() {
 
           <p className="border-t border-border pt-4 text-center text-[11px] text-muted-foreground">
             Acesso restrito a parceiros da rede.
-            <br />
-            Autenticação Supabase será conectada em breve.
           </p>
         </form>
       </div>

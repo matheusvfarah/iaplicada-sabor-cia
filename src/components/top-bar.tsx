@@ -19,14 +19,10 @@ export function TopBar({
           {title}
         </h1>
         {subtitle && (
-          <p className="hidden truncate text-xs text-muted-foreground sm:block">
-            {subtitle}
-          </p>
+          <p className="hidden truncate text-xs text-muted-foreground sm:block">{subtitle}</p>
         )}
       </div>
-      {actions && (
-        <div className="flex shrink-0 items-center gap-2">{actions}</div>
-      )}
+      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </header>
   );
 }

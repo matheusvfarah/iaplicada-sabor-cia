@@ -42,10 +42,10 @@ Marcos com folga embutida: o Dia 3 termina com ~6h de buffer antes do envio.
 
 ## Riscos conhecidos
 
-| Risco | Mitigação |
-|---|---|
-| Lovable gerar RLS/queries erradas | Banco é feito antes, à mão via migrations; Lovable só consome |
-| Recursão de policy RLS em profiles | Funções security definer desde o início |
-| Trial do n8n Cloud expirar/limitar | Testar login no n8n no Dia 1 |
-| Realtime não disparar | Habilitar replication nas tabelas `pedidos` e `alertas` logo na migration |
-| Env vars na Vercel | Deploy preliminar no Dia 2 |
+| Risco                              | Mitigação                                                                 |
+| ---------------------------------- | ------------------------------------------------------------------------- |
+| Lovable gerar RLS/queries erradas  | Banco é feito antes, à mão via migrations; Lovable só consome             |
+| Recursão de policy RLS em profiles | Funções security definer desde o início                                   |
+| Trial do n8n Cloud expirar/limitar | Testar login no n8n no Dia 1                                              |
+| Realtime não disparar              | Habilitar replication nas tabelas `pedidos` e `alertas` logo na migration |
+| Env vars na Vercel                 | Deploy preliminar no Dia 2                                                |

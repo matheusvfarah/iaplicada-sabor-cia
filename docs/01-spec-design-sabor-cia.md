@@ -8,13 +8,13 @@ Painel operacional para rede de dark kitchens: performance de unidades, pedidos,
 
 ## Stack
 
-| Camada | Ferramenta | Justificativa |
-|---|---|---|
-| Frontend | Lovable (scaffold) + Claude Code (refinamento via GitHub sync) | Stack recomendada; velocidade + controle fino |
-| Backend | Supabase (Auth, Postgres, RLS, Realtime) | Stack recomendada |
-| Automação | n8n Cloud | Stack recomendada |
-| Deploy | Vercel | Stack recomendada |
-| Gráficos/UI | Recharts + shadcn/ui + Tailwind | Padrão do Lovable, produtivo |
+| Camada      | Ferramenta                                                     | Justificativa                                 |
+| ----------- | -------------------------------------------------------------- | --------------------------------------------- |
+| Frontend    | Lovable (scaffold) + Claude Code (refinamento via GitHub sync) | Stack recomendada; velocidade + controle fino |
+| Backend     | Supabase (Auth, Postgres, RLS, Realtime)                       | Stack recomendada                             |
+| Automação   | n8n Cloud                                                      | Stack recomendada                             |
+| Deploy      | Vercel                                                         | Stack recomendada                             |
+| Gráficos/UI | Recharts + shadcn/ui + Tailwind                                | Padrão do Lovable, produtivo                  |
 
 ## 1. Banco de dados
 
@@ -76,7 +76,7 @@ Responsivo (mobile-first nos cards), loading/empty states, export CSV/PDF dos re
 5. **Insert** em `alertas` (tipo `meta`, mensagem = diagnóstico, payload = KPIs)
 6. **E-mail** ao gestor geral com o diagnóstico
 
-*Racional: o requisito pede um alerta; entregá-lo com diagnóstico gerado por IA conversa diretamente com o posicionamento da IAplicada.*
+_Racional: o requisito pede um alerta; entregá-lo com diagnóstico gerado por IA conversa diretamente com o posicionamento da IAplicada._
 
 ### WF2 — `alerta-avaliacao-ruim` (evento, não schedule)
 
@@ -85,7 +85,7 @@ Responsivo (mobile-first nos cards), loading/empty states, export CSV/PDF dos re
 3. **Enriquecimento** — busca pedido, unidade e gerente
 4. **Insert** em `alertas` (tipo `avaliacao`) + e-mail ao gerente da unidade
 
-*Demonstra os dois padrões de automação (schedule e event-driven) e fecha o loop com o Realtime do frontend: avaliação ruim entra → alerta aparece ao vivo no dashboard.*
+_Demonstra os dois padrões de automação (schedule e event-driven) e fecha o loop com o Realtime do frontend: avaliação ruim entra → alerta aparece ao vivo no dashboard._
 
 ### Documentação (`automations/README.md` + JSONs exportados)
 

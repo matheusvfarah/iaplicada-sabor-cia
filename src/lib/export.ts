@@ -1,7 +1,4 @@
-export function exportCSV<T extends Record<string, unknown>>(
-  filename: string,
-  rows: T[],
-) {
+export function exportCSV<T extends Record<string, unknown>>(filename: string, rows: T[]) {
   if (!rows.length) return;
   const headers = Object.keys(rows[0]);
   const csv = [

@@ -1,16 +1,8 @@
-import {
-  createFileRoute,
-  Outlet,
-  useNavigate,
-} from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { getSession } from "@/lib/auth";
+import { useSession } from "@/lib/auth";
 
 export const Route = createFileRoute("/dashboard")({
   component: DashboardLayout,
@@ -18,18 +10,15 @@ export const Route = createFileRoute("/dashboard")({
 
 function DashboardLayout() {
   const navigate = useNavigate();
-  const [ready, setReady] = useState(false);
+  const { session, ready } = useSession();
 
   useEffect(() => {
-    const s = getSession();
-    if (!s) {
+    if (ready && !session) {
       navigate({ to: "/login", replace: true });
-    } else {
-      setReady(true);
     }
-  }, [navigate]);
+  }, [ready, session, navigate]);
 
-  if (!ready) {
+  if (!ready || !session) {
     return (
       <div className="grid min-h-screen place-items-center bg-background">
         <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
