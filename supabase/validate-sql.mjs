@@ -133,6 +133,7 @@ await db.exec(`
   grant select on all tables in schema public to test_gestor, test_gerente;
   grant update on alertas to test_gestor, test_gerente;
   grant update (horario_abertura, horario_fechamento) on unidades to test_gestor, test_gerente;
+  grant update (status) on unidades to test_gestor, test_gerente;
   grant execute on all functions in schema public to test_gestor, test_gerente;
 `);
 
@@ -216,6 +217,38 @@ console.log(
 
 if (ownUpdate.rows.length !== 1 || otherUpdate.rows.length !== 0 || !bloqueouOutraColuna) {
   console.error("FAIL RLS horário de funcionamento");
+  process.exit(1);
+}
+
+// Ativar/desativar unidade: só gestor_geral --------------------
+let gerenteBloqueadoStatus = false;
+try {
+  await db.exec(`set role test_gerente; set app.uid = '00000000-0000-0000-0000-000000000002';`);
+  await db.query(`update unidades set status = 'inativa' where id = 1`);
+  await db.exec("reset role; reset app.uid;");
+} catch {
+  gerenteBloqueadoStatus = true;
+  await db.exec("reset role; reset app.uid;");
+}
+console.log(
+  "RLS/trigger gerente NÃO ativa/desativa unidade:",
+  gerenteBloqueadoStatus,
+  "(esperado true)",
+);
+
+let gestorMudaStatus = false;
+try {
+  await db.exec(`set role test_gestor; set app.uid = '00000000-0000-0000-0000-000000000001';`);
+  const r = await db.query(`update unidades set status = 'inativa' where id = 1 returning status`);
+  gestorMudaStatus = r.rows.length === 1 && r.rows[0].status === "inativa";
+  await db.exec("reset role; reset app.uid;");
+} catch (e) {
+  console.error("FAIL: gestor deveria poder ativar/desativar unidade ->", e.message);
+}
+console.log("RLS gestor ativa/desativa unidade:", gestorMudaStatus, "(esperado true)");
+
+if (!gerenteBloqueadoStatus || !gestorMudaStatus) {
+  console.error("FAIL RLS/trigger status da unidade");
   process.exit(1);
 }
 
