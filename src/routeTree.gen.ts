@@ -14,6 +14,10 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
 import { Route as DashboardUnitUnitIdRouteImport } from './routes/dashboard.unit.$unitId'
+import { Route as DashboardUnitUnitIdIndexRouteImport } from './routes/dashboard.unit.$unitId.index'
+import { Route as DashboardUnitUnitIdPedidosRouteImport } from './routes/dashboard.unit.$unitId.pedidos'
+import { Route as DashboardUnitUnitIdConfiguracoesRouteImport } from './routes/dashboard.unit.$unitId.configuracoes'
+import { Route as DashboardUnitUnitIdCardapioRouteImport } from './routes/dashboard.unit.$unitId.cardapio'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -40,19 +44,50 @@ const DashboardUnitUnitIdRoute = DashboardUnitUnitIdRouteImport.update({
   path: '/unit/$unitId',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardUnitUnitIdIndexRoute =
+  DashboardUnitUnitIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => DashboardUnitUnitIdRoute,
+  } as any)
+const DashboardUnitUnitIdPedidosRoute =
+  DashboardUnitUnitIdPedidosRouteImport.update({
+    id: '/pedidos',
+    path: '/pedidos',
+    getParentRoute: () => DashboardUnitUnitIdRoute,
+  } as any)
+const DashboardUnitUnitIdConfiguracoesRoute =
+  DashboardUnitUnitIdConfiguracoesRouteImport.update({
+    id: '/configuracoes',
+    path: '/configuracoes',
+    getParentRoute: () => DashboardUnitUnitIdRoute,
+  } as any)
+const DashboardUnitUnitIdCardapioRoute =
+  DashboardUnitUnitIdCardapioRouteImport.update({
+    id: '/cardapio',
+    path: '/cardapio',
+    getParentRoute: () => DashboardUnitUnitIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/login': typeof LoginRoute
   '/dashboard/': typeof DashboardIndexRoute
-  '/dashboard/unit/$unitId': typeof DashboardUnitUnitIdRoute
+  '/dashboard/unit/$unitId': typeof DashboardUnitUnitIdRouteWithChildren
+  '/dashboard/unit/$unitId/cardapio': typeof DashboardUnitUnitIdCardapioRoute
+  '/dashboard/unit/$unitId/configuracoes': typeof DashboardUnitUnitIdConfiguracoesRoute
+  '/dashboard/unit/$unitId/pedidos': typeof DashboardUnitUnitIdPedidosRoute
+  '/dashboard/unit/$unitId/': typeof DashboardUnitUnitIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/dashboard': typeof DashboardIndexRoute
-  '/dashboard/unit/$unitId': typeof DashboardUnitUnitIdRoute
+  '/dashboard/unit/$unitId/cardapio': typeof DashboardUnitUnitIdCardapioRoute
+  '/dashboard/unit/$unitId/configuracoes': typeof DashboardUnitUnitIdConfiguracoesRoute
+  '/dashboard/unit/$unitId/pedidos': typeof DashboardUnitUnitIdPedidosRoute
+  '/dashboard/unit/$unitId': typeof DashboardUnitUnitIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -60,14 +95,33 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteWithChildren
   '/login': typeof LoginRoute
   '/dashboard/': typeof DashboardIndexRoute
-  '/dashboard/unit/$unitId': typeof DashboardUnitUnitIdRoute
+  '/dashboard/unit/$unitId': typeof DashboardUnitUnitIdRouteWithChildren
+  '/dashboard/unit/$unitId/cardapio': typeof DashboardUnitUnitIdCardapioRoute
+  '/dashboard/unit/$unitId/configuracoes': typeof DashboardUnitUnitIdConfiguracoesRoute
+  '/dashboard/unit/$unitId/pedidos': typeof DashboardUnitUnitIdPedidosRoute
+  '/dashboard/unit/$unitId/': typeof DashboardUnitUnitIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/dashboard' | '/login' | '/dashboard/' | '/dashboard/unit/$unitId'
+    | '/'
+    | '/dashboard'
+    | '/login'
+    | '/dashboard/'
+    | '/dashboard/unit/$unitId'
+    | '/dashboard/unit/$unitId/cardapio'
+    | '/dashboard/unit/$unitId/configuracoes'
+    | '/dashboard/unit/$unitId/pedidos'
+    | '/dashboard/unit/$unitId/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/dashboard' | '/dashboard/unit/$unitId'
+  to:
+    | '/'
+    | '/login'
+    | '/dashboard'
+    | '/dashboard/unit/$unitId/cardapio'
+    | '/dashboard/unit/$unitId/configuracoes'
+    | '/dashboard/unit/$unitId/pedidos'
+    | '/dashboard/unit/$unitId'
   id:
     | '__root__'
     | '/'
@@ -75,6 +129,10 @@ export interface FileRouteTypes {
     | '/login'
     | '/dashboard/'
     | '/dashboard/unit/$unitId'
+    | '/dashboard/unit/$unitId/cardapio'
+    | '/dashboard/unit/$unitId/configuracoes'
+    | '/dashboard/unit/$unitId/pedidos'
+    | '/dashboard/unit/$unitId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -120,17 +178,62 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardUnitUnitIdRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/dashboard/unit/$unitId/': {
+      id: '/dashboard/unit/$unitId/'
+      path: '/'
+      fullPath: '/dashboard/unit/$unitId/'
+      preLoaderRoute: typeof DashboardUnitUnitIdIndexRouteImport
+      parentRoute: typeof DashboardUnitUnitIdRoute
+    }
+    '/dashboard/unit/$unitId/pedidos': {
+      id: '/dashboard/unit/$unitId/pedidos'
+      path: '/pedidos'
+      fullPath: '/dashboard/unit/$unitId/pedidos'
+      preLoaderRoute: typeof DashboardUnitUnitIdPedidosRouteImport
+      parentRoute: typeof DashboardUnitUnitIdRoute
+    }
+    '/dashboard/unit/$unitId/configuracoes': {
+      id: '/dashboard/unit/$unitId/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/dashboard/unit/$unitId/configuracoes'
+      preLoaderRoute: typeof DashboardUnitUnitIdConfiguracoesRouteImport
+      parentRoute: typeof DashboardUnitUnitIdRoute
+    }
+    '/dashboard/unit/$unitId/cardapio': {
+      id: '/dashboard/unit/$unitId/cardapio'
+      path: '/cardapio'
+      fullPath: '/dashboard/unit/$unitId/cardapio'
+      preLoaderRoute: typeof DashboardUnitUnitIdCardapioRouteImport
+      parentRoute: typeof DashboardUnitUnitIdRoute
+    }
   }
 }
 
+interface DashboardUnitUnitIdRouteChildren {
+  DashboardUnitUnitIdCardapioRoute: typeof DashboardUnitUnitIdCardapioRoute
+  DashboardUnitUnitIdConfiguracoesRoute: typeof DashboardUnitUnitIdConfiguracoesRoute
+  DashboardUnitUnitIdPedidosRoute: typeof DashboardUnitUnitIdPedidosRoute
+  DashboardUnitUnitIdIndexRoute: typeof DashboardUnitUnitIdIndexRoute
+}
+
+const DashboardUnitUnitIdRouteChildren: DashboardUnitUnitIdRouteChildren = {
+  DashboardUnitUnitIdCardapioRoute: DashboardUnitUnitIdCardapioRoute,
+  DashboardUnitUnitIdConfiguracoesRoute: DashboardUnitUnitIdConfiguracoesRoute,
+  DashboardUnitUnitIdPedidosRoute: DashboardUnitUnitIdPedidosRoute,
+  DashboardUnitUnitIdIndexRoute: DashboardUnitUnitIdIndexRoute,
+}
+
+const DashboardUnitUnitIdRouteWithChildren =
+  DashboardUnitUnitIdRoute._addFileChildren(DashboardUnitUnitIdRouteChildren)
+
 interface DashboardRouteChildren {
   DashboardIndexRoute: typeof DashboardIndexRoute
-  DashboardUnitUnitIdRoute: typeof DashboardUnitUnitIdRoute
+  DashboardUnitUnitIdRoute: typeof DashboardUnitUnitIdRouteWithChildren
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardIndexRoute: DashboardIndexRoute,
-  DashboardUnitUnitIdRoute: DashboardUnitUnitIdRoute,
+  DashboardUnitUnitIdRoute: DashboardUnitUnitIdRouteWithChildren,
 }
 
 const DashboardRouteWithChildren = DashboardRoute._addFileChildren(

@@ -69,7 +69,10 @@ await q("rpc_cancelamento_plataforma", "select * from rpc_cancelamento_plataform
 await q("rpc_resumo_mes", "select * from rpc_resumo_mes()");
 await q("rpc_pedidos_6m (3 linhas)", "select * from rpc_pedidos_6m() limit 3");
 await q("rpc_kpis_unidade(1)", "select * from rpc_kpis_unidade(1)");
-await q("rpc_kpis_unidade_periodo(1)", "select * from rpc_kpis_unidade_periodo(1, current_date - 6, current_date)");
+await q(
+  "rpc_kpis_unidade_periodo(1)",
+  "select * from rpc_kpis_unidade_periodo(1, current_date - 6, current_date)",
+);
 await q("rpc_tempo_medio_preparo(1)", "select rpc_tempo_medio_preparo(1, 7)");
 await q("rpc_itens_mais_vendidos(1)", "select * from rpc_itens_mais_vendidos(1, 5)");
 await q(

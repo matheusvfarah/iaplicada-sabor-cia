@@ -25,4 +25,20 @@ join lateral (
 ) pr on true
 where p.data_pedido::date = current_date;
 
+-- Backfill de preparando_em/entregue_em pros pedidos de hoje que já
+-- nasceram 'preparando'/'entregue' no seed histórico (só pedidos
+-- movidos pelo trigger novo ganham esses timestamps automaticamente).
+-- Sem isso o kanban mostra "Finalizados" sem horário de entrega.
+update pedidos
+set preparando_em = data_pedido + (5 + random() * 10 || ' minutes')::interval
+where data_pedido::date = current_date
+  and status in ('preparando', 'entregue')
+  and preparando_em is null;
+
+update pedidos
+set entregue_em = preparando_em + (15 + random() * 20 || ' minutes')::interval
+where data_pedido::date = current_date
+  and status = 'entregue'
+  and entregue_em is null;
+
 commit;
