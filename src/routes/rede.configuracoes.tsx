@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { LogOut, Store } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
@@ -20,9 +21,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/lib/supabase";
 import { signOut, useSession } from "@/lib/auth";
+import { useUnidades, type UnidadeResumo } from "@/lib/use-unidades";
 import { applyTheme, getStoredTheme, type Theme } from "@/lib/theme";
-
-type UnidadeResumo = { id: number; nome: string; status: "ativa" | "inativa" };
 
 export const Route = createFileRoute("/rede/configuracoes")({
   head: () => ({ meta: [{ title: "Configurações — Sabor & Cia" }] }),
@@ -32,24 +32,16 @@ export const Route = createFileRoute("/rede/configuracoes")({
 function RedeConfiguracoesPage() {
   const navigate = useNavigate();
   const { session } = useSession();
+  const queryClient = useQueryClient();
   const [tema, setTema] = useState<Theme>("dark");
   const [somAvisosHorario, setSomAvisosHorario] = useState(true);
-  const [unidades, setUnidades] = useState<UnidadeResumo[]>([]);
-  const [loadingUnidades, setLoadingUnidades] = useState(true);
+  const { data: unidades = [], isLoading: loadingUnidades } = useUnidades();
   const [pendingToggle, setPendingToggle] = useState<UnidadeResumo | null>(null);
   const [salvandoStatus, setSalvandoStatus] = useState(false);
 
   useEffect(() => {
     setTema(getStoredTheme());
     setSomAvisosHorario(localStorage.getItem("sabor-cia-som-avisos-horario") !== "false");
-    supabase
-      .from("unidades")
-      .select("id, nome, status")
-      .order("nome")
-      .then(({ data }) => {
-        setUnidades((data as UnidadeResumo[]) ?? []);
-        setLoadingUnidades(false);
-      });
   }, []);
 
   function handleToggleTema(escuro: boolean) {
@@ -80,9 +72,7 @@ function RedeConfiguracoesPage() {
       toast.error("Não foi possível atualizar a unidade", { description: error.message });
       return;
     }
-    setUnidades((prev) =>
-      prev.map((u) => (u.id === pendingToggle.id ? { ...u, status: novoStatus } : u)),
-    );
+    queryClient.invalidateQueries({ queryKey: ["unidades"] });
     toast.success(
       novoStatus === "ativa" ? `${pendingToggle.nome} ativada` : `${pendingToggle.nome} desativada`,
     );

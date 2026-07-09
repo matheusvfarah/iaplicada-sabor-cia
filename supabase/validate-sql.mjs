@@ -84,6 +84,14 @@ await q(
   "avaliacoes ruins hoje",
   "select nota, comentario from avaliacoes where nota <= 2 and data >= current_date",
 );
+await q(
+  "rpc_pedidos_por_plataforma_unidade(1)",
+  "select * from rpc_pedidos_por_plataforma_unidade(1, current_date - 180, current_date)",
+);
+await q(
+  "rpc_faturamento_serie_unidade(1)",
+  "select * from rpc_faturamento_serie_unidade(1, current_date - 180, current_date)",
+);
 
 // Transições de status do pedido --------------------------------
 const [{ id: pedidoTeste }] = (

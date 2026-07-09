@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/auth";
 import { useHorarioAlertas } from "@/lib/use-horario-alertas";
-import type { HorarioFuncionamento } from "@/lib/unidade-status";
+import { useUnidades } from "@/lib/use-unidades";
 
 type Alerta = {
   id: number;
@@ -15,12 +15,6 @@ type Alerta = {
   mensagem: string;
   criado_em: string;
   resolvido: boolean;
-};
-
-type UnidadeResumo = HorarioFuncionamento & {
-  id: number;
-  nome: string;
-  status: "ativa" | "inativa";
 };
 
 const TIPO_ICON = {
@@ -37,7 +31,7 @@ export function AlertsBadge() {
   const { session } = useSession();
   const isAdmin = session?.profile.role === "gestor_geral";
   const [alertas, setAlertas] = useState<Alerta[]>([]);
-  const [unidades, setUnidades] = useState<UnidadeResumo[]>([]);
+  const { data: unidades = [] } = useUnidades();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -79,15 +73,7 @@ export function AlertsBadge() {
 
   // Horário só interessa ao gestor de rede aqui — o gerente já vê o
   // banner + toast da própria unidade em qualquer subpágina dela.
-  useEffect(() => {
-    if (!isAdmin) return;
-    supabase
-      .from("unidades")
-      .select("id, nome, status, horario_abertura, horario_fechamento")
-      .eq("status", "ativa")
-      .then(({ data }) => setUnidades((data as UnidadeResumo[]) ?? []));
-  }, [isAdmin]);
-
+  // (a lista de unidades já vem cacheada — ver use-unidades.ts.)
   // Toast só dispara com o sino aberto — gestor administra várias
   // unidades, toast a cada uma virando o dia inteiro seria spam.
   const {

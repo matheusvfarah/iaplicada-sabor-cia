@@ -66,7 +66,6 @@ type ItemMaisVendido = {
 
 type FaturamentoSerie = {
   bucket: string;
-  unidade_id: number;
   receita: number;
 };
 
@@ -145,13 +144,8 @@ function UnitDashboardIndex() {
         .eq("status", "cancelado")
         .gte("data_pedido", p_inicio)
         .lt("data_pedido", fimLimite),
-      supabase
-        .from("pedidos")
-        .select("plataforma")
-        .eq("unidade_id", unit.id)
-        .gte("data_pedido", p_inicio)
-        .lt("data_pedido", fimLimite),
-      supabase.rpc("rpc_faturamento_serie", { p_inicio, p_fim }),
+      supabase.rpc("rpc_pedidos_por_plataforma_unidade", { p_unidade: unit.id, p_inicio, p_fim }),
+      supabase.rpc("rpc_faturamento_serie_unidade", { p_unidade: unit.id, p_inicio, p_fim }),
       supabase.rpc("rpc_tempo_medio_preparo", {
         p_unidade: unit.id,
         p_inicio: anterior.p_inicio,
@@ -185,13 +179,14 @@ function UnitDashboardIndex() {
         setItensMaisVendidos(itensRes.data ?? []);
         setCancelamentos(cancelamentosRes.count ?? 0);
         const counts: Record<Plataforma, number> = { ifood: 0, rappi: 0, proprio: 0 };
-        for (const row of (plataformasRes.data ?? []) as { plataforma: Plataforma }[]) {
-          counts[row.plataforma] += 1;
+        for (const row of (plataformasRes.data ?? []) as {
+          plataforma: Plataforma;
+          total: number;
+        }[]) {
+          counts[row.plataforma] = row.total;
         }
         setPlataformas(counts);
-        setSerieFaturamento(
-          ((serieRes.data ?? []) as FaturamentoSerie[]).filter((r) => r.unidade_id === unit.id),
-        );
+        setSerieFaturamento((serieRes.data ?? []) as FaturamentoSerie[]);
         setTempoMedioPreparoAnterior(tempoAnteriorRes.data ?? null);
         setCancelamentosAnterior(cancelamentosAnteriorRes.count ?? 0);
         setLoading(false);

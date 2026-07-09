@@ -1,5 +1,4 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -33,21 +32,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { BrandLogo } from "@/components/brand-logo";
-import { supabase } from "@/lib/supabase";
 import { signOut, useSession } from "@/lib/auth";
 import { useRecebidosCount } from "@/lib/use-recebidos-count";
 import { usePedidosHojeCount } from "@/lib/use-pedidos-hoje-count";
 import { useAlertasCount } from "@/lib/use-alertas-count";
+import { useUnidades } from "@/lib/use-unidades";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { isUnidadeAberta, useMinuteTick, type HorarioFuncionamento } from "@/lib/unidade-status";
+import { isUnidadeAberta, useMinuteTick } from "@/lib/unidade-status";
 import { cn } from "@/lib/utils";
-
-type UnidadeResumo = HorarioFuncionamento & {
-  id: number;
-  nome: string;
-  status: "ativa" | "inativa";
-};
 
 const UNIDADE_ITEMS = [
   {
@@ -116,14 +109,7 @@ export function AppSidebar() {
       : null
     : (session?.profile.unidade_id ?? null);
 
-  const [unidades, setUnidades] = useState<UnidadeResumo[]>([]);
-  useEffect(() => {
-    supabase
-      .from("unidades")
-      .select("id, nome, status, horario_abertura, horario_fechamento")
-      .order("nome")
-      .then(({ data }) => setUnidades((data as UnidadeResumo[]) ?? []));
-  }, []);
+  const { data: unidades = [] } = useUnidades();
   useMinuteTick();
 
   const currentUnit = unidades.find((u) => u.id === activeUnitId) ?? null;
