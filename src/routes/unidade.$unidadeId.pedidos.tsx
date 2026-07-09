@@ -2,6 +2,21 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  closestCorners,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
+import {
   Clock,
   Download,
   Flame,
@@ -78,6 +93,26 @@ const PLATFORM_BADGE: Record<Plataforma, string> = {
   proprio: "bg-success-tint text-success-tint-foreground",
 };
 
+// Drag-and-drop só faz transição de status pra frente — cancelamento
+// continua exclusivo do botão (com confirmação), nunca por drag.
+const PROXIMO_STATUS: Record<StatusKanban, StatusKanban | null> = {
+  recebido: "preparando",
+  preparando: "entregue",
+  entregue: null,
+};
+
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduced(mql.matches);
+    const onChange = () => setReduced(mql.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+  return reduced;
+}
+
 export const Route = createFileRoute("/unidade/$unidadeId/pedidos")({
   head: () => ({
     meta: [{ title: "Pedidos — Sabor & Cia" }],
@@ -118,6 +153,7 @@ function itensResumo(itens: ItemPedido[]) {
 function PedidosKanban() {
   const unit = useUnit();
   useTick(1000);
+  const reducedMotion = usePrefersReducedMotion();
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<PedidoKanban[]>([]);
   const [tempoMedioHoje, setTempoMedioHoje] = useState<number | null>(null);
@@ -125,6 +161,13 @@ function PedidosKanban() {
     pedido: PedidoKanban;
     tipo: "recusar" | "cancelar";
   } | null>(null);
+  const [activeId, setActiveId] = useState<number | null>(null);
+  const [overColumn, setOverColumn] = useState<StatusKanban | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
+  );
 
   useEffect(() => {
     let active = true;
@@ -252,6 +295,34 @@ function PedidosKanban() {
     setConfirmAction(null);
   }
 
+  const activeCard = activeId != null ? orders.find((o) => o.id === activeId) : null;
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(Number(event.active.id));
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    setOverColumn((event.over?.id as StatusKanban | undefined) ?? null);
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveId(null);
+    setOverColumn(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const pedido = orders.find((o) => o.id === Number(active.id));
+    if (!pedido) return;
+
+    const destino = over.id as StatusKanban;
+    // Só aceita a transição válida pra frente — qualquer outro alvo
+    // (incluindo soltar na própria coluna) não faz nada: o card volta
+    // sozinho pra posição de origem (dnd-kit desfaz o transform).
+    if (PROXIMO_STATUS[pedido.status] !== destino) return;
+
+    updateStatus(pedido, destino);
+  }
+
   const buildExportDataset = (): ExportDataset => ({
     page: `unidade-${unit.id}-pedidos`,
     title: `${unit.nome} — Pedidos`,
@@ -335,60 +406,97 @@ function PedidosKanban() {
       />
 
       <div className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8">
-        {/* Desktop: 3 colunas lado a lado */}
-        <div className="hidden gap-4 sm:grid sm:grid-cols-3">
-          <KanbanColumn
-            title="Recebidos"
-            icon={PackageOpen}
-            countTint="bg-accent-tint text-accent-tint-foreground"
-            count={columns.recebido.length}
-            loading={loading}
-            emptyTitle="Nenhum pedido novo"
-            emptyHint="Pedidos aceitos aparecem aqui assim que chegarem."
-          >
-            {columns.recebido.map((pedido) => (
-              <PedidoCard
-                key={pedido.id}
-                pedido={pedido}
-                onAceitar={() => updateStatus(pedido, "preparando")}
-                onRecusar={() => setConfirmAction({ pedido, tipo: "recusar" })}
-              />
-            ))}
-          </KanbanColumn>
+        {/* Desktop: 3 colunas lado a lado, com drag-and-drop entre elas */}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="hidden gap-4 sm:grid sm:grid-cols-3">
+            <KanbanColumn
+              id="recebido"
+              title="Recebidos"
+              icon={PackageOpen}
+              countTint="bg-accent-tint text-accent-tint-foreground"
+              count={columns.recebido.length}
+              loading={loading}
+              emptyTitle="Nenhum pedido novo"
+              emptyHint="Pedidos aceitos aparecem aqui assim que chegarem."
+              highlight={
+                overColumn === "recebido" &&
+                PROXIMO_STATUS[activeCard?.status ?? "entregue"] === "recebido"
+              }
+            >
+              {columns.recebido.map((pedido) => (
+                <PedidoCard
+                  key={pedido.id}
+                  pedido={pedido}
+                  draggable
+                  reducedMotion={reducedMotion}
+                  onAceitar={() => updateStatus(pedido, "preparando")}
+                  onRecusar={() => setConfirmAction({ pedido, tipo: "recusar" })}
+                />
+              ))}
+            </KanbanColumn>
 
-          <KanbanColumn
-            title="Em produção"
-            icon={ChefHat}
-            countTint="bg-primary/10 text-primary"
-            count={columns.preparando.length}
-            loading={loading}
-            emptyTitle="Nada em produção"
-            emptyHint="Aceite um pedido recebido para começar o preparo."
-          >
-            {columns.preparando.map((pedido) => (
-              <PedidoCard
-                key={pedido.id}
-                pedido={pedido}
-                onFinalizar={() => updateStatus(pedido, "entregue")}
-                onCancelar={() => setConfirmAction({ pedido, tipo: "cancelar" })}
-              />
-            ))}
-          </KanbanColumn>
+            <KanbanColumn
+              id="preparando"
+              title="Em produção"
+              icon={ChefHat}
+              countTint="bg-primary/10 text-primary"
+              count={columns.preparando.length}
+              loading={loading}
+              emptyTitle="Nada em produção"
+              emptyHint="Aceite um pedido recebido para começar o preparo."
+              highlight={
+                overColumn === "preparando" &&
+                PROXIMO_STATUS[activeCard?.status ?? "entregue"] === "preparando"
+              }
+            >
+              {columns.preparando.map((pedido) => (
+                <PedidoCard
+                  key={pedido.id}
+                  pedido={pedido}
+                  draggable
+                  reducedMotion={reducedMotion}
+                  onFinalizar={() => updateStatus(pedido, "entregue")}
+                  onCancelar={() => setConfirmAction({ pedido, tipo: "cancelar" })}
+                />
+              ))}
+            </KanbanColumn>
 
-          <KanbanColumn
-            title="Finalizados"
-            icon={PackageCheck}
-            countTint="bg-success-tint text-success-tint-foreground"
-            count={columns.entregue.length}
-            loading={loading}
-            emptyTitle="Nenhum pedido finalizado ainda"
-            emptyHint="Pedidos entregues hoje aparecem aqui."
-          >
-            {columns.entregue.map((pedido) => (
-              <PedidoCard key={pedido.id} pedido={pedido} finalizado />
-            ))}
-          </KanbanColumn>
-        </div>
+            <KanbanColumn
+              id="entregue"
+              title="Finalizados"
+              icon={PackageCheck}
+              countTint="bg-success-tint text-success-tint-foreground"
+              count={columns.entregue.length}
+              loading={loading}
+              emptyTitle="Nenhum pedido finalizado ainda"
+              emptyHint="Pedidos entregues hoje aparecem aqui."
+              highlight={false}
+            >
+              {columns.entregue.map((pedido) => (
+                <PedidoCard
+                  key={pedido.id}
+                  pedido={pedido}
+                  finalizado
+                  reducedMotion={reducedMotion}
+                />
+              ))}
+            </KanbanColumn>
+          </div>
+
+          <DragOverlay dropAnimation={reducedMotion ? null : undefined}>
+            {activeCard && (
+              <div className={reducedMotion ? "" : "rotate-2"}>
+                <PedidoCard pedido={activeCard} overlay reducedMotion={reducedMotion} />
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
 
         {/* Mobile: tabs segmentadas por coluna */}
         <Tabs defaultValue="recebido" className="sm:hidden">
@@ -499,6 +607,7 @@ function PedidosKanban() {
 }
 
 function KanbanColumn({
+  id,
   title,
   icon: Icon,
   countTint,
@@ -507,8 +616,10 @@ function KanbanColumn({
   emptyTitle,
   emptyHint,
   hideHeader,
+  highlight,
   children,
 }: {
+  id?: StatusKanban;
   title: string;
   icon: typeof PackageOpen;
   countTint: string;
@@ -517,11 +628,21 @@ function KanbanColumn({
   emptyTitle: string;
   emptyHint: string;
   hideHeader?: boolean;
+  highlight?: boolean;
   children: React.ReactNode;
 }) {
   const isEmpty = !loading && count === 0;
+  const { setNodeRef, isOver } = useDroppable({ id: id ?? title, disabled: !id });
+
   return (
-    <div className="flex min-w-0 flex-col rounded-xl bg-[#F3EDE1] p-3 dark:bg-secondary">
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "flex min-w-0 flex-col rounded-xl bg-[#F3EDE1] p-3 transition-colors dark:bg-secondary",
+        highlight && "ring-2 ring-primary/50",
+        isOver && !highlight && id && "cursor-not-allowed opacity-70",
+      )}
+    >
       {!hideHeader && (
         <div className="mb-3 flex items-center justify-between px-0.5">
           <div className="flex items-center gap-1.5">
@@ -562,6 +683,9 @@ function KanbanColumn({
 function PedidoCard({
   pedido,
   finalizado,
+  draggable,
+  overlay,
+  reducedMotion,
   onAceitar,
   onRecusar,
   onFinalizar,
@@ -569,6 +693,9 @@ function PedidoCard({
 }: {
   pedido: PedidoKanban;
   finalizado?: boolean;
+  draggable?: boolean;
+  overlay?: boolean;
+  reducedMotion?: boolean;
   onAceitar?: () => void;
   onRecusar?: () => void;
   onFinalizar?: () => void;
@@ -586,11 +713,28 @@ function PedidoCard({
   const urgente = (isRecebido && (elapsed ?? 0) > 5) || (isPreparando && (elapsed ?? 0) > 20);
   const resumo = itensResumo(pedido.itens);
 
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: pedido.id,
+    disabled: !draggable,
+  });
+
+  const style =
+    draggable && transform ? { transform: CSS.Translate.toString(transform) } : undefined;
+
   return (
     <div
+      ref={draggable ? setNodeRef : undefined}
+      style={style}
+      {...(draggable ? attributes : {})}
+      {...(draggable ? listeners : {})}
       className={cn(
-        "animate-in fade-in slide-in-from-top-2 rounded-[10px] border border-border bg-surface p-3 duration-300",
+        "rounded-[10px] border border-border bg-surface p-3",
+        !reducedMotion && "animate-in fade-in slide-in-from-top-2 duration-300",
+        !reducedMotion && draggable && "transition-shadow",
         finalizado && "opacity-75",
+        draggable && "touch-none",
+        isDragging && "opacity-40",
+        overlay && !reducedMotion && "cursor-grabbing shadow-xl",
       )}
     >
       {/* linha 1: código + badge plataforma + valor */}
