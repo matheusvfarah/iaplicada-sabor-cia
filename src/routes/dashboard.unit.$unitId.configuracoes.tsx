@@ -1,13 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { LogOut, MapPin, Calendar, CircleDot } from "lucide-react";
+import { LogOut, MapPin, Calendar, CircleDot, Clock } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
 import { AlertsBadge } from "@/components/alerts-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/lib/supabase";
 import { signOut } from "@/lib/auth";
@@ -19,6 +20,8 @@ type UnidadeDetalhe = {
   endereco: string;
   status: "ativa" | "inativa";
   data_abertura: string;
+  horario_abertura: string;
+  horario_fechamento: string;
 };
 
 export const Route = createFileRoute("/dashboard/unit/$unitId/configuracoes")({
@@ -32,6 +35,9 @@ function ConfiguracoesPage() {
   const [detalhe, setDetalhe] = useState<UnidadeDetalhe | null>(null);
   const [tema, setTema] = useState<Theme>("dark");
   const [somPedido, setSomPedido] = useState(true);
+  const [horarioAbertura, setHorarioAbertura] = useState("11:00");
+  const [horarioFechamento, setHorarioFechamento] = useState("23:00");
+  const [salvandoHorario, setSalvandoHorario] = useState(false);
 
   useEffect(() => {
     setTema(getStoredTheme());
@@ -40,16 +46,38 @@ function ConfiguracoesPage() {
     let active = true;
     supabase
       .from("unidades")
-      .select("nome, endereco, status, data_abertura")
+      .select("nome, endereco, status, data_abertura, horario_abertura, horario_fechamento")
       .eq("id", unit.id)
       .single()
       .then(({ data }) => {
-        if (active) setDetalhe(data);
+        if (!active || !data) return;
+        setDetalhe(data);
+        setHorarioAbertura(data.horario_abertura.slice(0, 5));
+        setHorarioFechamento(data.horario_fechamento.slice(0, 5));
       });
     return () => {
       active = false;
     };
   }, [unit.id]);
+
+  async function handleSalvarHorario() {
+    setSalvandoHorario(true);
+    const { error } = await supabase
+      .from("unidades")
+      .update({ horario_abertura: horarioAbertura, horario_fechamento: horarioFechamento })
+      .eq("id", unit.id);
+    setSalvandoHorario(false);
+    if (error) {
+      toast.error("Não foi possível salvar o horário");
+      return;
+    }
+    toast.success("Horário de funcionamento atualizado");
+    setDetalhe((prev) =>
+      prev
+        ? { ...prev, horario_abertura: horarioAbertura, horario_fechamento: horarioFechamento }
+        : prev,
+    );
+  }
 
   function handleToggleTema(escuro: boolean) {
     const novoTema: Theme = escuro ? "dark" : "light";
@@ -111,6 +139,49 @@ function ConfiguracoesPage() {
                     })}
                   </p>
                 </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 font-display text-base">
+              <Clock className="size-4 text-primary" />
+              Horário de funcionamento
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!detalhe ? (
+              <Skeleton className="h-16 w-full" />
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Abertura</Label>
+                    <Input
+                      type="time"
+                      value={horarioAbertura}
+                      onChange={(e) => setHorarioAbertura(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Fechamento</Label>
+                    <Input
+                      type="time"
+                      value={horarioFechamento}
+                      onChange={(e) => setHorarioFechamento(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={handleSalvarHorario}
+                  disabled={salvandoHorario}
+                  className="w-full sm:w-auto"
+                >
+                  Salvar horário
+                </Button>
               </>
             )}
           </CardContent>

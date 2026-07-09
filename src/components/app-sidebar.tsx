@@ -29,6 +29,11 @@ import { usePedidosHojeCount } from "@/lib/use-pedidos-hoje-count";
 import { useAlertasCount } from "@/lib/use-alertas-count";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  isUnidadeAberta,
+  useMinuteTick,
+  type HorarioFuncionamento,
+} from "@/lib/unidade-status";
 
 const OPERACAO_ITEMS = [
   {
@@ -80,9 +85,10 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { state, isMobile } = useSidebar();
   const collapsed = state === "collapsed" && !isMobile;
-  const [unit, setUnit] = useState<{ id: number; nome: string; status: "ativa" | "inativa" } | null>(
-    null,
-  );
+  const [unit, setUnit] = useState<
+    | (HorarioFuncionamento & { id: number; nome: string; status: "ativa" | "inativa" })
+    | null
+  >(null);
 
   const isAdmin = session?.profile.role === "gestor_geral";
   const unidadeId = session?.profile.unidade_id ?? null;
@@ -91,11 +97,14 @@ export function AppSidebar() {
     if (isAdmin || unidadeId == null) return;
     supabase
       .from("unidades")
-      .select("id, nome, status")
+      .select("id, nome, status, horario_abertura, horario_fechamento")
       .eq("id", unidadeId)
       .single()
       .then(({ data }) => setUnit(data ?? null));
   }, [isAdmin, unidadeId]);
+
+  useMinuteTick();
+  const unitAberta = !!unit && unit.status === "ativa" && isUnidadeAberta(unit);
 
   const isActive = (path: string) => pathname === path;
   const recebidos = useRecebidosCount(isAdmin ? null : unidadeId);
@@ -116,11 +125,11 @@ export function AppSidebar() {
             <div className="mt-1 flex items-center gap-1.5">
               <span
                 className={`size-1.5 rounded-full ${
-                  unit.status === "ativa" ? "bg-success" : "bg-sidebar-foreground/30"
+                  unitAberta ? "bg-success" : "bg-sidebar-foreground/30"
                 }`}
               />
               <span className="text-[10px] text-sidebar-foreground/60">
-                {unit.status === "ativa" ? "Aberta" : "Fechada"} · {pedidosHoje} pedido
+                {unitAberta ? "Aberta" : "Fechada"} · {pedidosHoje} pedido
                 {pedidosHoje === 1 ? "" : "s"} hoje
               </span>
             </div>
@@ -128,11 +137,9 @@ export function AppSidebar() {
         )}
 
         {!isAdmin && unit && collapsed && (
-          <div className="flex justify-center" title={`${unit.nome} · ${unit.status === "ativa" ? "Aberta" : "Fechada"}`}>
+          <div className="flex justify-center" title={`${unit.nome} · ${unitAberta ? "Aberta" : "Fechada"}`}>
             <span
-              className={`size-2 rounded-full ${
-                unit.status === "ativa" ? "bg-success" : "bg-sidebar-foreground/30"
-              }`}
+              className={`size-2 rounded-full ${unitAberta ? "bg-success" : "bg-sidebar-foreground/30"}`}
             />
           </div>
         )}

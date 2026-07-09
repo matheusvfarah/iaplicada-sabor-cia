@@ -30,12 +30,14 @@ truncate pedido_itens, produtos, log_cancelamentos, alertas, avaliacoes, pedidos
 select setseed(0.42);
 
 -- Unidades ------------------------------------------------------
-insert into unidades (nome, endereco, status, data_abertura) values
-  ('Centro',    'Rua Barão de Itapetininga, 140 - Centro, São Paulo/SP', 'ativa',   current_date - interval '3 years'),
-  ('Pinheiros', 'Rua dos Pinheiros, 870 - Pinheiros, São Paulo/SP',      'ativa',   current_date - interval '2 years'),
-  ('Moema',     'Av. Ibirapuera, 2033 - Moema, São Paulo/SP',            'ativa',   current_date - interval '18 months'),
-  ('Santana',   'Rua Voluntários da Pátria, 1550 - Santana, São Paulo/SP','ativa',  current_date - interval '1 year'),
-  ('Tatuapé',   'Rua Tuiuti, 2100 - Tatuapé, São Paulo/SP',              'inativa', current_date - interval '2 years');
+-- Pinheiros fecha depois da meia-noite de propósito, pra exercitar o
+-- cálculo de status que atravessa o dia (18:00–02:00).
+insert into unidades (nome, endereco, status, data_abertura, horario_abertura, horario_fechamento) values
+  ('Centro',    'Rua Barão de Itapetininga, 140 - Centro, São Paulo/SP', 'ativa',   current_date - interval '3 years', '11:00', '23:00'),
+  ('Pinheiros', 'Rua dos Pinheiros, 870 - Pinheiros, São Paulo/SP',      'ativa',   current_date - interval '2 years', '18:00', '02:00'),
+  ('Moema',     'Av. Ibirapuera, 2033 - Moema, São Paulo/SP',            'ativa',   current_date - interval '18 months', '11:00', '22:30'),
+  ('Santana',   'Rua Voluntários da Pátria, 1550 - Santana, São Paulo/SP','ativa',  current_date - interval '1 year', '11:30', '23:00'),
+  ('Tatuapé',   'Rua Tuiuti, 2100 - Tatuapé, São Paulo/SP',              'inativa', current_date - interval '2 years', '11:00', '23:00');
 
 -- Funcionários --------------------------------------------------
 insert into funcionarios (nome, unidade_id, cargo, email) values

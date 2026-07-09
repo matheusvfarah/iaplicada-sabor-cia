@@ -132,6 +132,7 @@ await db.exec(`
   create role test_gerente login; grant usage on schema public to test_gerente;
   grant select on all tables in schema public to test_gestor, test_gerente;
   grant update on alertas to test_gestor, test_gerente;
+  grant update (horario_abertura, horario_fechamento) on unidades to test_gestor, test_gerente;
   grant execute on all functions in schema public to test_gestor, test_gerente;
 `);
 
@@ -174,4 +175,44 @@ if (
   console.error("FAIL RLS");
   process.exit(1);
 }
+
+// Horário de funcionamento: gerente edita só a própria unidade -----
+await db.exec(`set role test_gerente; set app.uid = '00000000-0000-0000-0000-000000000002';`);
+const ownUpdate = await db.query(
+  `update unidades set horario_abertura = '08:00' where id = 1 returning id`,
+);
+await db.exec("reset role; reset app.uid;");
+console.log(
+  "RLS gerente edita horário da própria unidade:",
+  ownUpdate.rows.length === 1,
+  "(esperado true)",
+);
+
+await db.exec(`set role test_gerente; set app.uid = '00000000-0000-0000-0000-000000000002';`);
+const otherUpdate = await db.query(
+  `update unidades set horario_abertura = '08:00' where id = 2 returning id`,
+);
+await db.exec("reset role; reset app.uid;");
+console.log(
+  "RLS gerente NÃO edita horário de outra unidade:",
+  otherUpdate.rows.length === 0,
+  "(esperado true)",
+);
+
+let bloqueouOutraColuna = false;
+try {
+  await db.exec(`set role test_gerente; set app.uid = '00000000-0000-0000-0000-000000000002';`);
+  await db.query(`update unidades set nome = 'Hackeado' where id = 1`);
+  await db.exec("reset role; reset app.uid;");
+} catch {
+  bloqueouOutraColuna = true;
+  await db.exec("reset role; reset app.uid;");
+}
+console.log("RLS gerente NÃO edita nome/status (só horário):", bloqueouOutraColuna, "(esperado true)");
+
+if (ownUpdate.rows.length !== 1 || otherUpdate.rows.length !== 0 || !bloqueouOutraColuna) {
+  console.error("FAIL RLS horário de funcionamento");
+  process.exit(1);
+}
+
 console.log("\nTUDO OK — migrations, seed, trigger, RPCs e RLS validados.");

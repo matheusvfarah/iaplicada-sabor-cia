@@ -16,8 +16,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import { isUnidadeAberta, useMinuteTick, type HorarioFuncionamento } from "@/lib/unidade-status";
 
-type Unidade = { id: number; nome: string; status: "ativa" | "inativa" };
+type Unidade = HorarioFuncionamento & {
+  id: number;
+  nome: string;
+  status: "ativa" | "inativa";
+};
 
 const TABS = [
   { to: "/dashboard/unit/$unitId" as const, label: "Dashboard", icon: LayoutDashboard, exact: true },
@@ -55,10 +60,12 @@ export function UnitSwitcher({ currentUnit }: { currentUnit: { id: number; nome:
   useEffect(() => {
     supabase
       .from("unidades")
-      .select("id, nome, status")
+      .select("id, nome, status, horario_abertura, horario_fechamento")
       .order("nome")
       .then(({ data }) => setUnidades((data as Unidade[]) ?? []));
   }, []);
+
+  useMinuteTick();
 
   const filtered = useMemo(() => {
     if (!search.trim()) return unidades;
@@ -66,7 +73,11 @@ export function UnitSwitcher({ currentUnit }: { currentUnit: { id: number; nome:
     return unidades.filter((u) => u.nome.toLowerCase().includes(q));
   }, [unidades, search]);
 
-  const currentStatus = unidades.find((u) => u.id === currentUnit.id)?.status;
+  const abertaFor = (u: Unidade) => u.status === "ativa" && isUnidadeAberta(u);
+  const currentAberta = (() => {
+    const u = unidades.find((u) => u.id === currentUnit.id);
+    return u ? abertaFor(u) : false;
+  })();
 
   // Troca a unidade mas preserva a aba atual (ex.: em Pedidos de
   // Pinheiros, trocar pra Moema deve cair em Pedidos de Moema).
@@ -93,7 +104,7 @@ export function UnitSwitcher({ currentUnit }: { currentUnit: { id: number; nome:
               <span
                 className={cn(
                   "size-2 shrink-0 rounded-full",
-                  currentStatus === "ativa" ? "bg-success" : "bg-muted-foreground/40",
+                  currentAberta ? "bg-success" : "bg-muted-foreground/40",
                 )}
               />
               {currentUnit.nome}
@@ -117,34 +128,37 @@ export function UnitSwitcher({ currentUnit }: { currentUnit: { id: number; nome:
               {filtered.length === 0 ? (
                 <p className="px-3 py-2 text-xs text-muted-foreground">Nenhuma unidade encontrada.</p>
               ) : (
-                filtered.map((u) => (
-                  <button
-                    key={u.id}
-                    onClick={() => switchTo(u.id)}
-                    className={cn(
-                      "flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm hover:bg-secondary",
-                      u.id === currentUnit.id && "bg-secondary/60 font-medium",
-                    )}
-                  >
-                    <span
+                filtered.map((u) => {
+                  const aberta = abertaFor(u);
+                  return (
+                    <button
+                      key={u.id}
+                      onClick={() => switchTo(u.id)}
                       className={cn(
-                        "size-2 shrink-0 rounded-full",
-                        u.status === "ativa" ? "bg-success" : "bg-muted-foreground/40",
-                      )}
-                    />
-                    <span className="min-w-0 flex-1 truncate">{u.nome}</span>
-                    <span
-                      className={cn(
-                        "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                        u.status === "ativa"
-                          ? "bg-success-tint text-success-tint-foreground"
-                          : "bg-secondary text-muted-foreground",
+                        "flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm hover:bg-secondary",
+                        u.id === currentUnit.id && "bg-secondary/60 font-medium",
                       )}
                     >
-                      {u.status === "ativa" ? "Aberta" : "Fechada"}
-                    </span>
-                  </button>
-                ))
+                      <span
+                        className={cn(
+                          "size-2 shrink-0 rounded-full",
+                          aberta ? "bg-success" : "bg-muted-foreground/40",
+                        )}
+                      />
+                      <span className="min-w-0 flex-1 truncate">{u.nome}</span>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                          aberta
+                            ? "bg-success-tint text-success-tint-foreground"
+                            : "bg-secondary text-muted-foreground",
+                        )}
+                      >
+                        {aberta ? "Aberta" : "Fechada"}
+                      </span>
+                    </button>
+                  );
+                })
               )}
             </div>
           </DropdownMenuContent>

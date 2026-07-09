@@ -1,6 +1,7 @@
 import { createFileRoute, Link, notFound, Outlet } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, Clock } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -18,6 +19,7 @@ import { UnitContext } from "@/lib/unit-context";
 import { useSession } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { CURRENCY_FULL } from "@/lib/currency";
+import { minutosParaProximaVirada, useMinuteTick, type HorarioFuncionamento } from "@/lib/unidade-status";
 
 type Plataforma = "ifood" | "rappi" | "proprio";
 
@@ -78,6 +80,7 @@ function UnitLayout() {
   const { unidadeId } = Route.useLoaderData();
   const { session } = useSession();
   const [unit, setUnit] = useState<{ id: number; nome: string } | null>(null);
+  const [horario, setHorario] = useState<HorarioFuncionamento | null>(null);
   const [unitNotFound, setUnitNotFound] = useState(false);
   const [pendingQueue, setPendingQueue] = useState<Pedido[]>([]);
   const [pendingItens, setPendingItens] = useState<PedidoItemDetalhe[]>([]);
@@ -88,18 +91,50 @@ function UnitLayout() {
     let active = true;
     supabase
       .from("unidades")
-      .select("id, nome")
+      .select("id, nome, horario_abertura, horario_fechamento")
       .eq("id", unidadeId)
       .single()
       .then(({ data, error }) => {
         if (!active) return;
-        if (error || !data) setUnitNotFound(true);
-        else setUnit(data);
+        if (error || !data) {
+          setUnitNotFound(true);
+          return;
+        }
+        setUnit({ id: data.id, nome: data.nome });
+        setHorario({
+          horario_abertura: data.horario_abertura,
+          horario_fechamento: data.horario_fechamento,
+        });
       });
     return () => {
       active = false;
     };
   }, [unidadeId]);
+
+  // Aviso 30 min antes de abrir/fechar: banner discreto + toast único
+  // quando cruza o limiar (não repete a cada tick de 1 min).
+  useMinuteTick();
+  const proximaVirada = horario ? minutosParaProximaVirada(horario) : null;
+  const showBanner = !!proximaVirada && proximaVirada.minutos <= 30;
+  const lastNotifiedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!unit) return;
+    if (showBanner && proximaVirada) {
+      const key = `${unit.id}-${proximaVirada.tipo}`;
+      if (lastNotifiedRef.current !== key) {
+        lastNotifiedRef.current = key;
+        toast(
+          proximaVirada.tipo === "fecha"
+            ? `${unit.nome} fecha em ${proximaVirada.minutos} min`
+            : `${unit.nome} abre em ${proximaVirada.minutos} min`,
+        );
+      }
+    } else {
+      lastNotifiedRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só o cruzamento do limiar deve disparar o toast
+  }, [showBanner, proximaVirada?.tipo, unit?.id]);
 
   // Fila de pedidos pendentes (chegada simulada) — global à área da
   // unidade, aparece em qualquer subpágina (Dashboard/Pedidos/Cardápio).
@@ -259,6 +294,14 @@ function UnitLayout() {
       </Dialog>
 
       {session?.profile.role === "gestor_geral" && <UnitSwitcher currentUnit={unit} />}
+      {showBanner && proximaVirada && (
+        <div className="flex items-center justify-center gap-1.5 border-b border-border bg-accent-tint px-4 py-1.5 text-center text-xs font-medium text-accent-tint-foreground">
+          <Clock className="size-3.5 shrink-0" />
+          {proximaVirada.tipo === "fecha"
+            ? `Fecha em ${proximaVirada.minutos} min`
+            : `Abre em ${proximaVirada.minutos} min`}
+        </div>
+      )}
       <UnitNav unitId={unit.id} />
       <div className="pb-16 sm:pb-0">
         <Outlet />
