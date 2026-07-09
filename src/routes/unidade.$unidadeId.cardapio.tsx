@@ -1,17 +1,35 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Search, Sandwich, UtensilsCrossed, CupSoda, IceCreamCone, Package } from "lucide-react";
+import {
+  Search,
+  Sandwich,
+  UtensilsCrossed,
+  CupSoda,
+  IceCreamCone,
+  Package,
+  Download,
+  FileText,
+  ChevronDown,
+} from "lucide-react";
 import { TopBar } from "@/components/top-bar";
 import { AlertsBadge } from "@/components/alerts-badge";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/lib/supabase";
 import { CURRENCY_FULL } from "@/lib/currency";
+import { exportCsv, exportPdf, type ExportDataset } from "@/lib/export";
 import { useUnit } from "@/lib/unit-context";
 import { cn } from "@/lib/utils";
 
@@ -103,12 +121,63 @@ function CardapioPage() {
     }
   }
 
+  const categoriaLabel =
+    categoria === "todas" ? "Todas as categorias" : (CATEGORY_LABEL[categoria] ?? categoria);
+
+  const buildExportDataset = (): ExportDataset => ({
+    page: `unidade-${unit.id}-cardapio`,
+    title: `${unit.nome} — Cardápio`,
+    period: busca.trim() ? `${categoriaLabel} · busca: "${busca.trim()}"` : categoriaLabel,
+    sections: [
+      {
+        columns: [
+          { header: "Item", value: (r: Produto) => r.nome },
+          { header: "Categoria", value: (r: Produto) => CATEGORY_LABEL[r.categoria ?? ""] ?? "—" },
+          { header: "Preço", value: (r: Produto) => CURRENCY_FULL.format(r.preco) },
+          { header: "Status", value: (r: Produto) => (r.disponivel ? "Ativo" : "Pausado") },
+        ],
+        rows: filtrados,
+      },
+    ],
+  });
+
+  const handleExportCSV = () => exportCsv(buildExportDataset());
+  const handleExportPDF = () => exportPdf(buildExportDataset());
+
   return (
     <>
       <TopBar
         title="Cardápio"
         subtitle={loading ? "Carregando…" : `${ativos} itens ativos · ${pausados} pausados`}
-        actions={<AlertsBadge />}
+        actions={
+          <>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || filtrados.length === 0}
+                  className="gap-1.5"
+                >
+                  <Download className="size-3.5" />
+                  Exportar
+                  <ChevronDown className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleExportCSV}>
+                  <FileText className="mr-2 size-3.5" />
+                  CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportPDF}>
+                  <FileText className="mr-2 size-3.5" />
+                  PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <AlertsBadge />
+          </>
+        }
       />
 
       <div className="mx-auto w-full max-w-[1400px] space-y-6 p-4 sm:p-6 lg:p-8">

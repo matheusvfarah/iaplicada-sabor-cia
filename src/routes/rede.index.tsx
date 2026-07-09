@@ -27,8 +27,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/lib/supabase";
-import { CURRENCY } from "@/lib/currency";
-import { exportCSV, exportPDF } from "@/lib/export";
+import { CURRENCY, CURRENCY_FULL } from "@/lib/currency";
+import { exportCsv, exportPdf, type ExportDataset } from "@/lib/export";
 import {
   parseDateOnly,
   periodRange,
@@ -245,25 +245,61 @@ function GeneralDashboard() {
     return total > 0 ? (cancelados / total) * 100 : 0;
   }, [cancelamentoAnterior]);
 
-  const handleExportCSV = () => {
-    exportCSV(
-      "sabor-cia-ranking-unidades",
-      ranking.map((u) => ({
-        unidade: u.unidade_nome,
-        faturamento: u.receita,
-        pedidos: u.pedidos,
-        ticket_medio: u.ticket_medio,
-      })),
-    );
-  };
+  const buildExportDataset = (): ExportDataset => ({
+    page: "dashboard-geral",
+    title: "Dashboard Geral",
+    period: period === "custom" ? periodLabel : `Últimos ${periodLabel.toLowerCase()}`,
+    sections: [
+      {
+        title: "KPIs",
+        columns: [
+          { header: "Indicador", value: (r: { indicador: string }) => r.indicador },
+          { header: "Valor", value: (r: { valor: string }) => r.valor },
+        ],
+        rows: [
+          { indicador: "Meta do Período", valor: `${gaugePct.toFixed(1)}%` },
+          { indicador: "Ticket Médio Rede", valor: CURRENCY_FULL.format(ticketMedioRede) },
+          { indicador: "Cancelamentos", valor: `${cancelamentoRedeTaxa.toFixed(1)}%` },
+          { indicador: "Faturamento Total", valor: CURRENCY_FULL.format(receitaPeriodo) },
+        ],
+      },
+      {
+        title: "Faturamento por unidade",
+        columns: [
+          {
+            header: "Período",
+            value: (r: FaturamentoSerie) =>
+              parseDateOnly(r.bucket).toLocaleDateString("pt-BR", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              }),
+          },
+          { header: "Unidade", value: (r: FaturamentoSerie) => r.unidade_nome },
+          { header: "Pedidos", value: (r: FaturamentoSerie) => r.total_pedidos },
+          { header: "Receita", value: (r: FaturamentoSerie) => CURRENCY_FULL.format(r.receita) },
+        ],
+        rows: serieFaturamento,
+      },
+      {
+        title: "Ranking por Faturamento",
+        columns: [
+          { header: "Posição", value: (r: KpiUnidade & { posicao: number }) => r.posicao },
+          { header: "Unidade", value: (r: KpiUnidade) => r.unidade_nome },
+          { header: "Faturamento", value: (r: KpiUnidade) => CURRENCY_FULL.format(r.receita) },
+          { header: "Pedidos", value: (r: KpiUnidade) => r.pedidos },
+          {
+            header: "Ticket Médio",
+            value: (r: KpiUnidade) => CURRENCY_FULL.format(r.ticket_medio),
+          },
+        ],
+        rows: ranking.map((r, i) => ({ ...r, posicao: i + 1 })),
+      },
+    ],
+  });
 
-  const handleExportPDF = () => {
-    exportPDF(
-      "sabor-cia-dashboard-geral",
-      "Sabor & Cia — Dashboard Geral",
-      JSON.stringify({ period, receitaPeriodo, pedidosPeriodo, metaPeriodo, ranking }, null, 2),
-    );
-  };
+  const handleExportCSV = () => exportCsv(buildExportDataset());
+  const handleExportPDF = () => exportPdf(buildExportDataset());
 
   return (
     <>

@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/lib/supabase";
 import { CURRENCY_FULL } from "@/lib/currency";
-import { exportCSV, exportPDF } from "@/lib/export";
+import { exportCsv, exportPdf, type ExportDataset } from "@/lib/export";
 import { useUnit } from "@/lib/unit-context";
 import { cn } from "@/lib/utils";
 import { playNotificationSound } from "@/lib/notification-sound";
@@ -63,6 +63,12 @@ const PLATFORM_LABEL: Record<Plataforma, string> = {
   ifood: "iFood",
   rappi: "Rappi",
   proprio: "Próprio",
+};
+
+const STATUS_LABEL: Record<StatusKanban, string> = {
+  recebido: "Recebido",
+  preparando: "Em produção",
+  entregue: "Finalizado",
 };
 
 // Badges de plataforma seguem o design system: iFood = danger, Rappi = âmbar/marca, Próprio = verde.
@@ -246,25 +252,54 @@ function PedidosKanban() {
     setConfirmAction(null);
   }
 
-  const handleExportCSV = () => {
-    exportCSV(
-      `sabor-cia-unidade-${unit.id}-pedidos-hoje`,
-      orders.map((o) => ({
-        codigo: o.codigo,
-        status: o.status,
-        plataforma: PLATFORM_LABEL[o.plataforma],
-        valor: o.valor,
-      })),
-    );
-  };
+  const buildExportDataset = (): ExportDataset => ({
+    page: `unidade-${unit.id}-pedidos`,
+    title: `${unit.nome} — Pedidos`,
+    period: "Hoje",
+    sections: [
+      {
+        columns: [
+          { header: "Código", value: (r: PedidoKanban) => r.codigo ?? `#${r.id}` },
+          { header: "Plataforma", value: (r: PedidoKanban) => PLATFORM_LABEL[r.plataforma] },
+          { header: "Status", value: (r: PedidoKanban) => STATUS_LABEL[r.status] },
+          { header: "Itens", value: (r: PedidoKanban) => itensResumo(r.itens) },
+          { header: "Valor", value: (r: PedidoKanban) => CURRENCY_FULL.format(r.valor) },
+          {
+            header: "Recebido às",
+            value: (r: PedidoKanban) =>
+              new Date(r.data_pedido).toLocaleTimeString("pt-BR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+          },
+          {
+            header: "Em produção às",
+            value: (r: PedidoKanban) =>
+              r.preparando_em
+                ? new Date(r.preparando_em).toLocaleTimeString("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "",
+          },
+          {
+            header: "Finalizado às",
+            value: (r: PedidoKanban) =>
+              r.entregue_em
+                ? new Date(r.entregue_em).toLocaleTimeString("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "",
+          },
+        ],
+        rows: orders,
+      },
+    ],
+  });
 
-  const handleExportPDF = () => {
-    exportPDF(
-      `sabor-cia-unidade-${unit.id}-pedidos-hoje`,
-      `Sabor & Cia — ${unit.nome} — Pedidos de hoje`,
-      JSON.stringify(orders, null, 2),
-    );
-  };
+  const handleExportCSV = () => exportCsv(buildExportDataset());
+  const handleExportPDF = () => exportPdf(buildExportDataset());
 
   return (
     <>

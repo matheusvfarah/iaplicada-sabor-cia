@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/lib/supabase";
 import { CURRENCY, CURRENCY_FULL } from "@/lib/currency";
-import { exportCSV, exportPDF } from "@/lib/export";
+import { exportCsv, exportPdf, type ExportDataset } from "@/lib/export";
 import { useUnit } from "@/lib/unit-context";
 import { useSession } from "@/lib/auth";
 import { greetingForHour } from "@/lib/greeting";
@@ -235,20 +235,73 @@ function UnitDashboardIndex() {
     .map((p) => ({ id: p, name: PLATFORM_LABEL[p], value: plataformas[p] }))
     .filter((p) => p.value > 0);
 
-  const handleExportCSV = () => {
-    exportCSV(
-      `sabor-cia-unidade-${unit.id}-top5`,
-      top5.map((o) => ({ id: o.id, plataforma: PLATFORM_LABEL[o.plataforma], valor: o.valor })),
-    );
-  };
+  const buildExportDataset = (): ExportDataset => ({
+    page: `unidade-${unit.id}`,
+    title: `${unit.nome} — Dashboard da Unidade`,
+    period: periodLbl,
+    sections: [
+      {
+        title: "KPIs",
+        columns: [
+          { header: "Indicador", value: (r: { indicador: string }) => r.indicador },
+          { header: "Valor", value: (r: { valor: string }) => r.valor },
+        ],
+        rows: [
+          { indicador: "Receita do período", valor: CURRENCY_FULL.format(kpis?.receita ?? 0) },
+          { indicador: "Meta prorrateada", valor: CURRENCY_FULL.format(kpis?.meta ?? 0) },
+          {
+            indicador: "Nota do período",
+            valor: kpis?.nota_media ? kpis.nota_media.toFixed(1) : "—",
+          },
+          {
+            indicador: "Tempo médio de preparo",
+            valor: tempoMedioPreparo != null ? `${tempoMedioPreparo.toFixed(0)} min` : "—",
+          },
+          { indicador: "Cancelamentos", valor: String(cancelamentos) },
+        ],
+      },
+      {
+        title: "Receita por dia",
+        columns: [
+          { header: "Data", value: (r: { label: string }) => r.label },
+          { header: "Receita", value: (r: { receita: number }) => CURRENCY_FULL.format(r.receita) },
+        ],
+        rows: chartData,
+      },
+      {
+        title: "Pedidos por plataforma",
+        columns: [
+          { header: "Plataforma", value: (r: { name: string }) => r.name },
+          { header: "Pedidos", value: (r: { value: number }) => r.value },
+        ],
+        rows: platformChart,
+      },
+      {
+        title: "Top 5 pedidos por valor",
+        columns: [
+          { header: "Pedido", value: (r: Pedido) => `#${r.id}` },
+          { header: "Plataforma", value: (r: Pedido) => PLATFORM_LABEL[r.plataforma] },
+          { header: "Valor", value: (r: Pedido) => CURRENCY_FULL.format(r.valor) },
+        ],
+        rows: top5,
+      },
+      {
+        title: "Itens mais vendidos",
+        columns: [
+          { header: "Item", value: (r: ItemMaisVendido) => r.nome },
+          { header: "Quantidade", value: (r: ItemMaisVendido) => r.total_quantidade },
+          {
+            header: "Receita",
+            value: (r: ItemMaisVendido) => CURRENCY_FULL.format(r.total_receita),
+          },
+        ],
+        rows: itensMaisVendidos,
+      },
+    ],
+  });
 
-  const handleExportPDF = () => {
-    exportPDF(
-      `sabor-cia-unidade-${unit.id}`,
-      `Sabor & Cia — ${unit.nome}`,
-      JSON.stringify({ unit, period, kpis, top5, tempoMedioPreparo, itensMaisVendidos }, null, 2),
-    );
-  };
+  const handleExportCSV = () => exportCsv(buildExportDataset());
+  const handleExportPDF = () => exportPdf(buildExportDataset());
 
   return (
     <>
