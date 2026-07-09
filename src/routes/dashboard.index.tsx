@@ -29,8 +29,6 @@ import {
 import { supabase } from "@/lib/supabase";
 import { CURRENCY } from "@/lib/currency";
 import { exportCSV, exportPDF } from "@/lib/export";
-import { isUnidadeAberta, useMinuteTick, type HorarioFuncionamento } from "@/lib/unidade-status";
-import { cn } from "@/lib/utils";
 import {
   parseDateOnly,
   periodRange,
@@ -85,8 +83,6 @@ type CancelamentoPlataforma = {
   taxa: number;
 };
 
-type UnidadeStatus = HorarioFuncionamento & { id: number; status: "ativa" | "inativa" };
-
 const CHART_COLORS = [
   "var(--chart-1)",
   "var(--chart-2)",
@@ -104,25 +100,7 @@ function GeneralDashboard() {
   const [serieFaturamento, setSerieFaturamento] = useState<FaturamentoSerie[]>([]);
   const [cancelamento, setCancelamento] = useState<CancelamentoPlataforma[]>([]);
   const [granularidade, setGranularidade] = useState<Granularidade>("month");
-  const [unidadesStatus, setUnidadesStatus] = useState<UnidadeStatus[]>([]);
   const [kpisUnidadesAnterior, setKpisUnidadesAnterior] = useState<KpiUnidade[]>([]);
-
-  useEffect(() => {
-    supabase
-      .from("unidades")
-      .select("id, status, horario_abertura, horario_fechamento")
-      .then(({ data }) => setUnidadesStatus((data as UnidadeStatus[]) ?? []));
-  }, []);
-  useMinuteTick();
-
-  const abertaFor = (id: number) => {
-    const u = unidadesStatus.find((u) => u.id === id);
-    return !!u && u.status === "ativa" && isUnidadeAberta(u);
-  };
-  const totalUnidades = unidadesStatus.length;
-  const unidadesAbertas = unidadesStatus.filter(
-    (u) => u.status === "ativa" && isUnidadeAberta(u),
-  ).length;
 
   useEffect(() => {
     if (period === "custom" && (!customRange.inicio || !customRange.fim)) return;
@@ -298,16 +276,6 @@ function GeneralDashboard() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <span
-              className={cn(
-                "hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium sm:inline-flex",
-                unidadesAbertas > 0
-                  ? "bg-success-tint text-success-tint-foreground"
-                  : "bg-secondary text-muted-foreground",
-              )}
-            >
-              {unidadesAbertas} de {totalUnidades} unidades abertas
-            </span>
             <AlertsBadge />
           </>
         }
@@ -439,28 +407,15 @@ function GeneralDashboard() {
                   ) : (
                     ranking.map((u, i) => {
                       const pct = (u.receita / ranking[0].receita) * 100;
-                      const aberta = abertaFor(u.unidade_id);
                       return (
                         <div key={u.unidade_id} className="space-y-1.5">
                           <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
                             <span className="w-5 font-mono text-xs text-muted-foreground">
                               {String(i + 1).padStart(2, "0")}
                             </span>
-                            <div className="flex min-w-0 items-center gap-2">
-                              <p className="min-w-0 truncate text-sm font-semibold">
-                                {u.unidade_nome}
-                              </p>
-                              <span
-                                className={cn(
-                                  "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                                  aberta
-                                    ? "bg-success-tint text-success-tint-foreground"
-                                    : "bg-secondary text-muted-foreground",
-                                )}
-                              >
-                                {aberta ? "Aberta" : "Fechada"}
-                              </span>
-                            </div>
+                            <p className="min-w-0 truncate text-sm font-semibold">
+                              {u.unidade_nome}
+                            </p>
                             <div className="flex shrink-0 flex-col items-end">
                               <p className="text-right font-mono text-sm font-semibold tabular-nums">
                                 {CURRENCY.format(u.receita)}
