@@ -94,6 +94,10 @@ await q(
   "rpc_faturamento_serie_unidade(1)",
   "select * from rpc_faturamento_serie_unidade(1, current_date - 180, current_date)",
 );
+await q(
+  "rpc_avaliacoes_unidade(1) (3 linhas)",
+  "select * from rpc_avaliacoes_unidade(1, current_date - 180, current_date) limit 3",
+);
 
 // Transições de status do pedido --------------------------------
 const [{ id: pedidoTeste }] = (
@@ -188,6 +192,23 @@ if (
   gerentePedidosOutraUnidade[0].n !== 0
 ) {
   console.error("FAIL RLS");
+  process.exit(1);
+}
+
+// rpc_avaliacoes_unidade(): não é security definer — RLS de
+// pedidos/avaliacoes já barra gerente pedindo outra unidade.
+const gerenteAvaliacoesOutraUnidade = await asUser(
+  "test_gerente",
+  "00000000-0000-0000-0000-000000000002",
+  "select count(*)::int as n from rpc_avaliacoes_unidade(2, current_date - 365, current_date)",
+);
+console.log(
+  "RLS gerente não vê avaliações de outra unidade via RPC:",
+  gerenteAvaliacoesOutraUnidade[0].n,
+  "(esperado 0)",
+);
+if (gerenteAvaliacoesOutraUnidade[0].n !== 0) {
+  console.error("FAIL RLS rpc_avaliacoes_unidade");
   process.exit(1);
 }
 

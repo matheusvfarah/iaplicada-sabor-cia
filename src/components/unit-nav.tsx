@@ -1,6 +1,19 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, ClipboardList, UtensilsCrossed, Settings } from "lucide-react";
+import {
+  LayoutDashboard,
+  ClipboardList,
+  UtensilsCrossed,
+  Settings,
+  Star,
+  MoreHorizontal,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useRecebidosCount } from "@/lib/use-recebidos-count";
 import { cn } from "@/lib/utils";
 
@@ -23,11 +36,20 @@ const ITEMS = [
     icon: UtensilsCrossed,
     exact: false,
   },
+];
+
+// Itens que não cabem na barra de 4 no mobile ficam agrupados atrás
+// de "Mais" — mesmo conjunto que a sidebar mostra inteiro no desktop.
+const MAIS_ITEMS = [
+  {
+    to: "/unidade/$unidadeId/avaliacoes" as const,
+    label: "Avaliações",
+    icon: Star,
+  },
   {
     to: "/unidade/$unidadeId/configuracoes" as const,
     label: "Configurações",
     icon: Settings,
-    exact: false,
   },
 ];
 
@@ -42,6 +64,8 @@ export function UnitNav({ unidadeId }: { unidadeId: number }) {
     const resolved = to.replace("$unidadeId", String(unidadeId));
     return exact ? pathname === resolved : pathname.startsWith(resolved);
   };
+
+  const maisAtivo = MAIS_ITEMS.some((item) => isActive(item.to));
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t border-border bg-background/95 py-1.5 backdrop-blur-md sm:hidden">
@@ -68,6 +92,30 @@ export function UnitNav({ unidadeId }: { unidadeId: number }) {
           </Link>
         );
       })}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className={cn(
+            "flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] font-medium",
+            maisAtivo ? "text-primary" : "text-muted-foreground",
+          )}
+        >
+          <MoreHorizontal className="size-4" />
+          Mais
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" side="top" className="w-48">
+          {MAIS_ITEMS.map((item) => {
+            const Icon = item.icon;
+            return (
+              <DropdownMenuItem key={item.to} asChild>
+                <Link to={item.to} params={{ unidadeId: String(unidadeId) }}>
+                  <Icon className="mr-2 size-3.5" />
+                  {item.label}
+                </Link>
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </nav>
   );
 }

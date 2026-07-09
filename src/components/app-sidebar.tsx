@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronDown,
   Store,
+  Star,
 } from "lucide-react";
 import {
   Sidebar,
@@ -60,6 +61,12 @@ const UNIDADE_ITEMS = [
     to: "/unidade/$unidadeId/cardapio" as const,
     label: "Cardápio",
     icon: UtensilsCrossed,
+    exact: false,
+  },
+  {
+    to: "/unidade/$unidadeId/avaliacoes" as const,
+    label: "Avaliações",
+    icon: Star,
     exact: false,
   },
   {

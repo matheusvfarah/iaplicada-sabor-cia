@@ -4,6 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useSession } from "@/lib/auth";
 import { useNotificacoesCtx } from "@/lib/notificacoes-context";
 import { TIPOS_HORARIO, type Notificacao, type TipoNotificacao } from "@/lib/use-notificacoes";
+import { formatRelativeTime } from "@/lib/format-time";
 import { cn } from "@/lib/utils";
 
 const TIPO_ICON: Record<TipoNotificacao, typeof Bell> = {
@@ -23,17 +24,6 @@ const TIPO_ICON_CLASS: Record<TipoNotificacao, string> = {
   vai_abrir: "text-muted-foreground",
   vai_fechar: "text-muted-foreground",
 };
-
-function formatRelativeTime(iso: string) {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(diffMs / 60000);
-  if (min < 1) return "agora";
-  if (min < 60) return `há ${min} min`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `há ${h}h`;
-  const d = Math.floor(h / 24);
-  return `há ${d}d`;
-}
 
 // Gerente: recebe os 5 tipos, sempre da própria unidade (garantido no
 // banco — não precisa filtrar aqui). Gestor: só horário no sino,

@@ -20,6 +20,7 @@ import { Route as UnidadeUnidadeIdIndexRouteImport } from './routes/unidade.$uni
 import { Route as UnidadeUnidadeIdPedidosRouteImport } from './routes/unidade.$unidadeId.pedidos'
 import { Route as UnidadeUnidadeIdConfiguracoesRouteImport } from './routes/unidade.$unidadeId.configuracoes'
 import { Route as UnidadeUnidadeIdCardapioRouteImport } from './routes/unidade.$unidadeId.cardapio'
+import { Route as UnidadeUnidadeIdAvaliacoesRouteImport } from './routes/unidade.$unidadeId.avaliacoes'
 
 const RedeRoute = RedeRouteImport.update({
   id: '/rede',
@@ -78,6 +79,12 @@ const UnidadeUnidadeIdCardapioRoute =
     path: '/cardapio',
     getParentRoute: () => UnidadeUnidadeIdRoute,
   } as any)
+const UnidadeUnidadeIdAvaliacoesRoute =
+  UnidadeUnidadeIdAvaliacoesRouteImport.update({
+    id: '/avaliacoes',
+    path: '/avaliacoes',
+    getParentRoute: () => UnidadeUnidadeIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -87,6 +94,7 @@ export interface FileRoutesByFullPath {
   '/rede/configuracoes': typeof RedeConfiguracoesRoute
   '/unidade/$unidadeId': typeof UnidadeUnidadeIdRouteWithChildren
   '/rede/': typeof RedeIndexRoute
+  '/unidade/$unidadeId/avaliacoes': typeof UnidadeUnidadeIdAvaliacoesRoute
   '/unidade/$unidadeId/cardapio': typeof UnidadeUnidadeIdCardapioRoute
   '/unidade/$unidadeId/configuracoes': typeof UnidadeUnidadeIdConfiguracoesRoute
   '/unidade/$unidadeId/pedidos': typeof UnidadeUnidadeIdPedidosRoute
@@ -98,6 +106,7 @@ export interface FileRoutesByTo {
   '/rede/alertas': typeof RedeAlertasRoute
   '/rede/configuracoes': typeof RedeConfiguracoesRoute
   '/rede': typeof RedeIndexRoute
+  '/unidade/$unidadeId/avaliacoes': typeof UnidadeUnidadeIdAvaliacoesRoute
   '/unidade/$unidadeId/cardapio': typeof UnidadeUnidadeIdCardapioRoute
   '/unidade/$unidadeId/configuracoes': typeof UnidadeUnidadeIdConfiguracoesRoute
   '/unidade/$unidadeId/pedidos': typeof UnidadeUnidadeIdPedidosRoute
@@ -112,6 +121,7 @@ export interface FileRoutesById {
   '/rede/configuracoes': typeof RedeConfiguracoesRoute
   '/unidade/$unidadeId': typeof UnidadeUnidadeIdRouteWithChildren
   '/rede/': typeof RedeIndexRoute
+  '/unidade/$unidadeId/avaliacoes': typeof UnidadeUnidadeIdAvaliacoesRoute
   '/unidade/$unidadeId/cardapio': typeof UnidadeUnidadeIdCardapioRoute
   '/unidade/$unidadeId/configuracoes': typeof UnidadeUnidadeIdConfiguracoesRoute
   '/unidade/$unidadeId/pedidos': typeof UnidadeUnidadeIdPedidosRoute
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/rede/configuracoes'
     | '/unidade/$unidadeId'
     | '/rede/'
+    | '/unidade/$unidadeId/avaliacoes'
     | '/unidade/$unidadeId/cardapio'
     | '/unidade/$unidadeId/configuracoes'
     | '/unidade/$unidadeId/pedidos'
@@ -138,6 +149,7 @@ export interface FileRouteTypes {
     | '/rede/alertas'
     | '/rede/configuracoes'
     | '/rede'
+    | '/unidade/$unidadeId/avaliacoes'
     | '/unidade/$unidadeId/cardapio'
     | '/unidade/$unidadeId/configuracoes'
     | '/unidade/$unidadeId/pedidos'
@@ -151,6 +163,7 @@ export interface FileRouteTypes {
     | '/rede/configuracoes'
     | '/unidade/$unidadeId'
     | '/rede/'
+    | '/unidade/$unidadeId/avaliacoes'
     | '/unidade/$unidadeId/cardapio'
     | '/unidade/$unidadeId/configuracoes'
     | '/unidade/$unidadeId/pedidos'
@@ -243,6 +256,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UnidadeUnidadeIdCardapioRouteImport
       parentRoute: typeof UnidadeUnidadeIdRoute
     }
+    '/unidade/$unidadeId/avaliacoes': {
+      id: '/unidade/$unidadeId/avaliacoes'
+      path: '/avaliacoes'
+      fullPath: '/unidade/$unidadeId/avaliacoes'
+      preLoaderRoute: typeof UnidadeUnidadeIdAvaliacoesRouteImport
+      parentRoute: typeof UnidadeUnidadeIdRoute
+    }
   }
 }
 
@@ -261,6 +281,7 @@ const RedeRouteChildren: RedeRouteChildren = {
 const RedeRouteWithChildren = RedeRoute._addFileChildren(RedeRouteChildren)
 
 interface UnidadeUnidadeIdRouteChildren {
+  UnidadeUnidadeIdAvaliacoesRoute: typeof UnidadeUnidadeIdAvaliacoesRoute
   UnidadeUnidadeIdCardapioRoute: typeof UnidadeUnidadeIdCardapioRoute
   UnidadeUnidadeIdConfiguracoesRoute: typeof UnidadeUnidadeIdConfiguracoesRoute
   UnidadeUnidadeIdPedidosRoute: typeof UnidadeUnidadeIdPedidosRoute
@@ -268,6 +289,7 @@ interface UnidadeUnidadeIdRouteChildren {
 }
 
 const UnidadeUnidadeIdRouteChildren: UnidadeUnidadeIdRouteChildren = {
+  UnidadeUnidadeIdAvaliacoesRoute: UnidadeUnidadeIdAvaliacoesRoute,
   UnidadeUnidadeIdCardapioRoute: UnidadeUnidadeIdCardapioRoute,
   UnidadeUnidadeIdConfiguracoesRoute: UnidadeUnidadeIdConfiguracoesRoute,
   UnidadeUnidadeIdPedidosRoute: UnidadeUnidadeIdPedidosRoute,
