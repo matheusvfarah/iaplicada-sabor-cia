@@ -36,7 +36,6 @@ for (const f of readdirSync(join(dir, "migrations")).sort()) {
   await run(f, readFileSync(join(dir, "migrations", f), "utf8"));
 }
 await run("seed.sql", readFileSync(join(dir, "seed.sql"), "utf8"));
-await run("seed_ops.sql", readFileSync(join(dir, "seed_ops.sql"), "utf8"));
 
 // Smoke tests -------------------------------------------------
 const q = async (label, sql) => {

@@ -20,7 +20,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Simula chegada irregular de pedidos: n8n não tem um\n// \"intervalo aleatório\" nativo sem um loop de Wait, então a\n// aleatoriedade fica aqui — só ~40% das execuções do cron\n// realmente vira um pedido nas plataformas.\nconst CHANCE_DE_DISPARAR = 0.4;\nif (Math.random() > CHANCE_DE_DISPARAR) {\n  return [];\n}\n\nconst UNIDADES_ATIVAS = [1, 2, 3, 4]; // Centro, Pinheiros, Moema, Santana\nconst PLATAFORMAS = [\"ifood\", \"rappi\", \"proprio\"];\n\nconst unidade_id = UNIDADES_ATIVAS[Math.floor(Math.random() * UNIDADES_ATIVAS.length)];\nconst plataforma = PLATAFORMAS[Math.floor(Math.random() * PLATAFORMAS.length)];\n\nreturn [{ json: { unidade_id, plataforma } }];"
+        "jsCode": "// Simula chegada irregular de pedidos: n8n não tem um\n// \"intervalo aleatório\" nativo sem um loop de Wait, então a\n// aleatoriedade fica aqui — só ~40% das execuções do cron\n// realmente vira um pedido nas plataformas.\nconst CHANCE_DE_DISPARAR = 0.4;\nif (Math.random() > CHANCE_DE_DISPARAR) {\n  return [];\n}\n\nconst UNIDADES_ATIVAS = [1, 2, 3, 4]; // Centro, Pinheiros, Moema, Santana\n\n// ~90% iFood, ~5% Rappi, ~5% pedido próprio — mesma distribuição\n// usada no seed histórico (supabase/seed.sql).\nconst r = Math.random();\nconst plataforma = r < 0.9 ? \"ifood\" : r < 0.95 ? \"rappi\" : \"proprio\";\n\nconst unidade_id = UNIDADES_ATIVAS[Math.floor(Math.random() * UNIDADES_ATIVAS.length)];\n\nreturn [{ json: { unidade_id, plataforma } }];"
       },
       "id": "a1a1a1a1-0002-4000-8000-000000000002",
       "name": "Sorteia disparo e unidade",

@@ -28,7 +28,7 @@ Workflow pronto pra importar em **[`simulador-pedidos.json`](./simulador-pedidos
    Pinheiros, Moema, Santana) e a plataforma (`ifood`/`rappi`/`proprio`).
 3. **HTTP Request — "Busca cardápio disponível"** — `POST` na RPC pública
    `rpc_cardapio_disponivel` (nova, migration `20260709000014`) com a `anon
-   key`. Sem isso o gerador ficaria cego sobre preços/disponibilidade e teria
+key`. Sem isso o gerador ficaria cego sobre preços/disponibilidade e teria
    que adivinhar `produto_id`, quebrando toda vez que um item fosse pausado
    no Cardápio — RLS normal de `produtos` exige usuário autenticado, então
    essa RPC é `security definer`, expondo só `produto_id`/`nome`/`preco` dos
@@ -50,12 +50,12 @@ Unidade — o gerente aceita (`recebido`) ou recusa (`cancelado`, populando
 **Variáveis de ambiente do n8n** (`Settings → Environments` ou variáveis do
 workflow, nunca hardcoded nos nodes):
 
-| Variável                 | Valor                                                          |
-| ------------------------- | --------------------------------------------------------------- |
-| `SUPABASE_URL`             | mesma de `VITE_SUPABASE_URL` no `.env` do app                   |
-| `SUPABASE_ANON_KEY`        | mesma de `VITE_SUPABASE_ANON_KEY` (pública, só lê cardápio)      |
-| `APP_URL`                  | URL do deploy (Vercel) ou túnel local (ex. ngrok) em dev          |
-| `ORDER_SIMULATOR_SECRET`   | mesmo valor configurado no servidor do app                       |
+| Variável                 | Valor                                                       |
+| ------------------------ | ----------------------------------------------------------- |
+| `SUPABASE_URL`           | mesma de `VITE_SUPABASE_URL` no `.env` do app               |
+| `SUPABASE_ANON_KEY`      | mesma de `VITE_SUPABASE_ANON_KEY` (pública, só lê cardápio) |
+| `APP_URL`                | URL do deploy (Vercel) ou túnel local (ex. ngrok) em dev    |
+| `ORDER_SIMULATOR_SECRET` | mesmo valor configurado no servidor do app                  |
 
 O JSON foi validado como sintaticamente correto e revisado nó a nó contra o
 schema desta versão do n8n — a importação (`n8n import:workflow` ou

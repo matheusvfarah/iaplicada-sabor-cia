@@ -1,6 +1,9 @@
 -- ============================================================
 -- Sabor & Cia — Seed de demonstração
--- 5 unidades · ~13.000 pedidos em 6 meses com sazonalidade ·
+-- 5 unidades (cardápio próprio, nichado, por unidade) · ~13.000
+-- pedidos em 6 meses com sazonalidade, cada um com itens reais em
+-- pedido_itens e valor = soma desses itens (não um número solto) ·
+-- preparando_em/entregue_em nascem com o pedido, sem backfill ·
 -- metas · funcionários · ~4.500 avaliações
 --
 -- Idempotente: limpa e regenera tudo. Datas são relativas a
@@ -51,27 +54,66 @@ insert into funcionarios (nome, unidade_id, cargo, email) values
   ('Aline Cardoso',    4, 'Auxiliar',  'aline.cardoso@saborecia.com.br'),
   ('Marcos Vieira',    5, 'Gerente',   'marcos.vieira@saborecia.com.br');
 
--- Cardápio (mesmo menu-base em cada unidade ativa) ---------------
--- Alimenta o simulador de pedidos: cada pedido simulado sorteia
--- itens deste catálogo, respeitando a disponibilidade. 1-2 itens
--- pausados por unidade para demonstrar a tela de Cardápio.
+-- Cardápio (rede toda de cozinha italiana) ------------------------
+-- Alimenta o simulador de pedidos e o kanban: cada pedido sorteia
+-- itens do catálogo da PRÓPRIA unidade, respeitando disponível. 1-2
+-- itens pausados por unidade para demonstrar a tela de Cardápio.
+-- Cada unidade tem uma especialidade dentro do conceito italiano.
+--
+-- Centro    -> pizzaria (fornos a lenha, giro rápido)
+-- Pinheiros -> massas artesanais
+-- Moema     -> risotos
+-- Santana   -> cantina executiva (ticket mais baixo)
 insert into produtos (unidade_id, nome, preco, categoria, descricao, disponivel)
 select u.id, p.nome, p.preco, p.categoria, p.descricao, p.disponivel
 from unidades u
-cross join (values
-  ('Combo Burger Artesanal',   32.90, 'burgers',    'Blend 180g, queijo, molho da casa e fritas', true),
-  ('Cheeseburger Duplo',       28.90, 'burgers',    'Dois blends, cheddar e picles',               true),
-  ('Veggie Burger',            26.90, 'burgers',    'Hambúrguer de grão-de-bico e legumes grelhados', false),
-  ('Marmita Fit Frango',       24.90, 'pratos',     'Frango grelhado, arroz integral e legumes',   true),
-  ('Marmita Fit Carne',        26.90, 'pratos',     'Carne magra, batata doce e brócolis',         true),
-  ('Bowl Vegetariano',         22.50, 'pratos',     'Grãos, legumes assados e molho tahine',       true),
-  ('Yakisoba Tradicional',     28.00, 'pratos',     'Macarrão oriental com legumes e proteína',    true),
-  ('Salada Caesar com Frango', 21.90, 'pratos',     'Alface, frango grelhado, croutons e parmesão', true),
-  ('Refrigerante Lata',         6.50, 'bebidas',    'Lata 350ml',                                   true),
-  ('Suco Natural 300ml',        8.90, 'bebidas',    'Polpa de fruta natural, sem açúcar adicionado', true),
-  ('Sobremesa Brownie',         9.90, 'sobremesas', 'Brownie de chocolate com nozes',               true),
-  ('Petit Gateau',             14.90, 'sobremesas', 'Bolo de chocolate quente com sorvete',        false)
-) as p(nome, preco, categoria, descricao, disponivel)
+join lateral (
+  values
+    -- Centro (id 1) — Pizzaria -----------------------------------
+    (1, 'Pizza Margherita',        42.90, 'pratos',     'Molho de tomate, muçarela de búfala e manjericão', true),
+    (1, 'Pizza Calabresa',         39.90, 'pratos',     'Calabresa fatiada, cebola e azeitonas',            true),
+    (1, 'Pizza Quatro Queijos',    44.90, 'pratos',     'Muçarela, gorgonzola, parmesão e provolone',       true),
+    (1, 'Pizza Vegetariana',       38.90, 'pratos',     'Abobrinha, berinjela, pimentão e rúcula',          false),
+    (1, 'Bruschetta',              19.90, 'pratos',     'Pão italiano tostado, tomate e manjericão fresco', true),
+    (1, 'Refrigerante Lata',        6.50, 'bebidas',    'Lata 350ml',                                       true),
+    (1, 'Suco Natural 300ml',       8.90, 'bebidas',    'Polpa de fruta natural, sem açúcar adicionado',    true),
+    (1, 'Água com Gás 500ml',       6.90, 'bebidas',    'Gelada',                                            true),
+    (1, 'Tiramisù',                16.90, 'sobremesas', 'Camadas de café, mascarpone e cacau',              true),
+    (1, 'Cannoli Siciliano',       14.90, 'sobremesas', 'Massa crocante recheada com ricota doce',          false),
+    -- Pinheiros (id 2) — Massas Artesanais ------------------------
+    (2, 'Fettuccine Alfredo',      36.90, 'pratos',     'Massa fresca, molho de queijo e manteiga',         true),
+    (2, 'Spaghetti alla Bolognese',34.90, 'pratos',     'Massa fresca, ragu de carne lento',                 true),
+    (2, 'Ravioli de Ricota',       38.90, 'pratos',     'Recheado de ricota e espinafre, molho de sálvia',  true),
+    (2, 'Penne all''Arrabbiata',   29.90, 'pratos',     'Molho de tomate picante, alho e pimenta',          true),
+    (2, 'Lasanha à Bolonhesa',     37.90, 'pratos',     'Camadas de massa, ragu e molho branco',             false),
+    (2, 'Suco Detox Verde',        12.90, 'bebidas',    'Couve, gengibre, limão e maçã verde',              true),
+    (2, 'Água com Gás 500ml',       6.90, 'bebidas',    'Gelada',                                            true),
+    (2, 'Chá Gelado Natural',       9.90, 'bebidas',    'Chá verde com hortelã, sem açúcar',                true),
+    (2, 'Panna Cotta',             14.90, 'sobremesas', 'Creme italiano com calda de frutas vermelhas',     true),
+    (2, 'Tiramisù',                16.90, 'sobremesas', 'Camadas de café, mascarpone e cacau',              true),
+    -- Moema (id 3) — Risotos ----------------------------------------
+    (3, 'Risoto de Funghi',        42.90, 'pratos',     'Cogumelos frescos, vinho branco e parmesão',       true),
+    (3, 'Risoto de Camarão',       46.90, 'pratos',     'Camarões salteados e toque de limão siciliano',    true),
+    (3, 'Risoto à Milanesa',       38.90, 'pratos',     'Açafrão, vinho branco e parmesão',                 true),
+    (3, 'Risoto de Alho-poró',     36.90, 'pratos',     'Alho-poró, manteiga e queijo grana padano',        true),
+    (3, 'Carpaccio',               32.90, 'pratos',     'Fatias finas de carne, alcaparras e parmesão',     false),
+    (3, 'Refrigerante Lata',        6.50, 'bebidas',    'Lata 350ml',                                       true),
+    (3, 'Suco de Manga',            9.90, 'bebidas',    'Polpa natural de manga',                           true),
+    (3, 'Água com Gás 500ml',       6.90, 'bebidas',    'Gelada',                                            true),
+    (3, 'Tiramisù',                16.90, 'sobremesas', 'Camadas de café, mascarpone e cacau',              true),
+    (3, 'Panna Cotta',             14.90, 'sobremesas', 'Creme italiano com calda de frutas vermelhas',     true),
+    -- Santana (id 4) — Cantina Executiva (ticket mais baixo) -------
+    (4, 'Marmita de Spaghetti',    21.90, 'pratos',     'Spaghetti ao molho de tomate e carne moída',       true),
+    (4, 'Marmita de Nhoque',       23.90, 'pratos',     'Nhoque de batata ao molho sugo',                   true),
+    (4, 'Prato Executivo Lasanha', 24.90, 'pratos',     'Lasanha à bolonhesa com salada',                   true),
+    (4, 'Prato Executivo Penne',   21.90, 'pratos',     'Penne ao molho branco com frango',                 true),
+    (4, 'Sopa de Legumes',         16.90, 'pratos',     'Sopa caseira com legumes da estação',              false),
+    (4, 'Refrigerante Lata',        6.50, 'bebidas',    'Lata 350ml',                                       true),
+    (4, 'Suco Natural 300ml',       7.90, 'bebidas',    'Polpa de fruta natural, sem açúcar adicionado',    true),
+    (4, 'Água Mineral 500ml',       4.50, 'bebidas',    'Sem gás',                                          true),
+    (4, 'Pudim de Leite',           9.90, 'sobremesas', 'Pudim de leite condensado tradicional',            true),
+    (4, 'Cannoli Siciliano',       12.90, 'sobremesas', 'Massa crocante recheada com ricota doce',          true)
+) as p(unidade_id, nome, preco, categoria, descricao, disponivel) on p.unidade_id = u.id
 where u.status = 'ativa';
 
 -- Metas (6 meses × 4 unidades ativas) ---------------------------
@@ -84,18 +126,23 @@ from unidades u
 cross join generate_series(0, 5) m
 where u.status = 'ativa';
 
--- Pedidos (~4.000 em 180 dias) ----------------------------------
+-- Pedidos (~4.000 em 180 dias), itens e tempos embutidos ----------
 -- Volume: base por unidade × fator fim de semana (1.4) × ruído
 -- Santana cai para 45% do volume no mês corrente (caso do alerta)
-with cfg (uid, base, ticket) as (
-  values (1, 22, 72.0), (2, 18, 85.0), (3, 15, 65.0), (4, 12, 58.0)
+--
+-- valor é sempre a soma real de pedido_itens (nunca um número solto)
+-- e preparando_em/entregue_em nascem junto com o pedido — sem
+-- backfill posterior. Cada pedido sorteia 1-4 itens distintos do
+-- cardápio da PRÓPRIA unidade, respeitando o que está disponível.
+with cfg (uid, base) as (
+  values (1, 22), (2, 18), (3, 15), (4, 12)
 ),
 dias as (
   select d::date as dia
   from generate_series(current_date - 179, current_date, interval '1 day') d
 ),
 volume as (
-  select c.uid, c.ticket, d.dia,
+  select c.uid, d.dia,
     greatest(1, round(
       c.base
       * case when extract(isodow from d.dia) in (6, 7) then 1.4 else 1.0 end
@@ -106,39 +153,105 @@ volume as (
   from cfg c cross join dias d
 ),
 linhas as (
-  select v.uid, v.ticket, v.dia,
-         random() as r_plat, random() as r_status, random() as r_valor,
-         random() as r_turno, random() as r_hora
+  select v.uid, v.dia,
+         random() as r_plat, random() as r_status,
+         random() as r_turno, random() as r_hora,
+         random() as r_prep_start, random() as r_prep_dur
   from volume v cross join lateral generate_series(1, v.n)
+),
+linhas_status as (
+  select uid, dia, r_turno, r_hora, r_prep_start, r_prep_dur,
+    case when r_plat < 0.90 then 'ifood'
+         when r_plat < 0.95 then 'rappi'
+         else 'proprio' end::plataforma_pedido as plataforma,
+    case
+      when dia < current_date then
+        case when r_plat < 0.90 and r_status < 0.11 then 'cancelado'
+             when r_plat >= 0.90 and r_plat < 0.95 and r_status < 0.08 then 'cancelado'
+             when r_plat >= 0.95 and r_status < 0.05 then 'cancelado'
+             else 'entregue' end
+      else -- pedidos de hoje: operação em andamento
+        case when r_status < 0.25 then 'recebido'
+             when r_status < 0.50 then 'preparando'
+             else 'entregue' end
+    end::status_pedido as status
+  from linhas
+),
+linhas_tempos as (
+  select uid, plataforma, status,
+    case
+      when dia < current_date then
+        -- picos de almoço (11h-14h) e jantar (18h-22h)
+        dia::timestamptz
+          + case when r_turno < 0.40
+                 then make_interval(hours => 11, mins => (r_hora * 180)::int)
+                 else make_interval(hours => 18, mins => (r_hora * 240)::int) end
+      else least(now() - make_interval(mins => (r_hora * 360)::int), now())
+    end as data_pedido,
+    r_prep_start, r_prep_dur
+  from linhas_status
+),
+linhas_finais as (
+  select uid, plataforma, status, data_pedido,
+    case when status in ('preparando', 'entregue')
+      then data_pedido + make_interval(mins => (5 + r_prep_start * 10)::int)
+      else null end as preparando_em,
+    r_prep_dur
+  from linhas_tempos
+),
+novos_pedidos as (
+  insert into pedidos (unidade_id, valor, plataforma, status, data_pedido, preparando_em, entregue_em)
+  select
+    -- valor é só um placeholder (constraint exige > 0) — a query
+    -- final desta CTE substitui pela soma real de pedido_itens.
+    uid, 0.01, plataforma, status, data_pedido, preparando_em,
+    case when status = 'entregue'
+      then preparando_em + make_interval(mins => (15 + r_prep_dur * 20)::int)
+      else null end
+  from linhas_finais
+  returning id, unidade_id
+),
+-- n_itens por pedido, decidido uma vez só (não pode nascer dentro
+-- do join de baixo, senão cada linha do produto sortearia seu
+-- próprio n e o "limit" pararia de fazer sentido).
+pedidos_com_n as (
+  select id as pedido_id, unidade_id, (1 + floor(random() * 4))::int as n_itens
+  from novos_pedidos
+),
+-- Junta cada pedido com TODO o cardápio disponível da própria
+-- unidade e numera aleatoriamente dentro de cada pedido — evita de
+-- vez o padrão "LATERAL + order by random() limit N" correlacionado
+-- por unidade_id, que o planner do Postgres pode cachear/reusar
+-- entre pedidos da MESMA unidade (Memoize), fazendo vários pedidos
+-- saírem com exatamente os mesmos itens.
+itens_candidatos as (
+  select pc.pedido_id, pc.n_itens, pr.id as produto_id, pr.preco,
+         row_number() over (partition by pc.pedido_id order by random()) as rn
+  from pedidos_com_n pc
+  join produtos pr on pr.unidade_id = pc.unidade_id and pr.disponivel = true
+),
+itens_gerados as (
+  insert into pedido_itens (pedido_id, produto_id, quantidade, preco_unitario)
+  select pedido_id, produto_id, (1 + floor(random() * 3))::int, preco
+  from itens_candidatos
+  where rn <= n_itens
+  returning pedido_id, quantidade, preco_unitario
 )
-insert into pedidos (unidade_id, valor, plataforma, status, data_pedido)
-select
-  uid,
-  round((ticket * (0.55 + r_valor * 0.9))::numeric, 2),
-  case when r_plat < 0.50 then 'ifood'
-       when r_plat < 0.75 then 'rappi'
-       else 'proprio' end::plataforma_pedido,
-  case
-    when dia < current_date then
-      case when r_plat < 0.50 and r_status < 0.11 then 'cancelado'
-           when r_plat >= 0.50 and r_plat < 0.75 and r_status < 0.08 then 'cancelado'
-           when r_plat >= 0.75 and r_status < 0.05 then 'cancelado'
-           else 'entregue' end
-    else -- pedidos de hoje: operação em andamento
-      case when r_status < 0.25 then 'recebido'
-           when r_status < 0.50 then 'preparando'
-           else 'entregue' end
-  end::status_pedido,
-  case
-    when dia < current_date then
-      -- picos de almoço (11h-14h) e jantar (18h-22h)
-      dia::timestamptz
-        + case when r_turno < 0.40
-               then make_interval(hours => 11, mins => (r_hora * 180)::int)
-               else make_interval(hours => 18, mins => (r_hora * 240)::int) end
-    else least(now() - make_interval(mins => (r_hora * 360)::int), now())
-  end
-from linhas;
+select count(*) from itens_gerados;
+
+-- Statement à parte de propósito: um UPDATE dentro do mesmo WITH
+-- do INSERT usa o snapshot do início do comando e não enxerga as
+-- linhas que o próprio INSERT acabou de criar (ficaria tudo com o
+-- placeholder 0.01) — só funciona como uma instrução nova, lendo
+-- pedido_itens já commitado pela instrução anterior.
+update pedidos p
+set valor = sub.total
+from (
+  select pedido_id, sum(quantidade * preco_unitario) as total
+  from pedido_itens
+  group by pedido_id
+) sub
+where p.id = sub.pedido_id;
 
 -- Avaliações (~35% dos pedidos entregues) ------------------------
 with candidatos as (
