@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Bar,
   BarChart,
@@ -42,11 +42,13 @@ import { cn } from "@/lib/utils";
 import {
   parseDateOnly,
   periodRange,
+  previousPeriodRange,
   periodLabel as computePeriodLabel,
   defaultCustomRange,
   type PeriodId,
   type Granularidade,
 } from "@/lib/period";
+import { KpiDelta, MicroDelta } from "@/components/kpi-delta";
 
 export const Route = createFileRoute("/dashboard/")({
   head: () => ({
@@ -111,6 +113,7 @@ function GeneralDashboard() {
   const [cancelamento, setCancelamento] = useState<CancelamentoPlataforma[]>([]);
   const [granularidade, setGranularidade] = useState<Granularidade>("month");
   const [unidadesStatus, setUnidadesStatus] = useState<UnidadeStatus[]>([]);
+  const [kpisUnidadesAnterior, setKpisUnidadesAnterior] = useState<KpiUnidade[]>([]);
 
   useEffect(() => {
     supabase
@@ -133,18 +136,21 @@ function GeneralDashboard() {
     let active = true;
     setLoading(true);
     const { p_inicio, p_fim, granularidade: gran } = periodRange(period, customRange);
+    const anterior = previousPeriodRange(p_inicio, p_fim);
 
     Promise.all([
       supabase.rpc("rpc_meta_periodo", { p_inicio, p_fim }),
       supabase.rpc("rpc_kpis_unidades", { p_inicio, p_fim }),
       supabase.rpc("rpc_faturamento_serie", { p_inicio, p_fim }),
       supabase.rpc("rpc_cancelamento_plataforma", { p_inicio, p_fim }),
-    ]).then(([metaRes, kpisRes, serieRes, cancelamentoRes]) => {
+      supabase.rpc("rpc_kpis_unidades", anterior),
+    ]).then(([metaRes, kpisRes, serieRes, cancelamentoRes, kpisAnteriorRes]) => {
       if (!active) return;
       setMetaPeriodo(metaRes.data ?? 0);
       setKpisUnidades(kpisRes.data ?? []);
       setSerieFaturamento(serieRes.data ?? []);
       setCancelamento(cancelamentoRes.data ?? []);
+      setKpisUnidadesAnterior(kpisAnteriorRes.data ?? []);
       setGranularidade(gran);
       setLoading(false);
     });
@@ -158,6 +164,12 @@ function GeneralDashboard() {
     () => [...kpisUnidades].sort((a, b) => b.receita - a.receita),
     [kpisUnidades],
   );
+
+  const receitaAnteriorPorUnidade = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const u of kpisUnidadesAnterior) map.set(u.unidade_id, u.receita);
+    return map;
+  }, [kpisUnidadesAnterior]);
 
   const unidadesOrdenadas = useMemo(
     () => [...new Set(serieFaturamento.map((p) => p.unidade_id))].sort((a, b) => a - b),
@@ -212,6 +224,17 @@ function GeneralDashboard() {
   );
 
   const ticketMedioRede = pedidosPeriodo > 0 ? receitaPeriodo / pedidosPeriodo : 0;
+
+  const receitaPeriodoAnterior = useMemo(
+    () => kpisUnidadesAnterior.reduce((s, u) => s + u.receita, 0),
+    [kpisUnidadesAnterior],
+  );
+  const pedidosPeriodoAnterior = useMemo(
+    () => kpisUnidadesAnterior.reduce((s, u) => s + u.pedidos, 0),
+    [kpisUnidadesAnterior],
+  );
+  const ticketMedioRedeAnterior =
+    pedidosPeriodoAnterior > 0 ? receitaPeriodoAnterior / pedidosPeriodoAnterior : 0;
 
   const periodLabel = useMemo(() => computePeriodLabel(period, customRange), [period, customRange]);
 
@@ -348,6 +371,7 @@ function GeneralDashboard() {
                 label="Ticket Médio Rede"
                 value={CURRENCY.format(ticketMedioRede)}
                 hint={periodLabel}
+                delta={<KpiDelta current={ticketMedioRede} previous={ticketMedioRedeAnterior} />}
               />
               <KpiCard
                 label="Cancelamentos"
@@ -359,6 +383,7 @@ function GeneralDashboard() {
                 label="Faturamento Total"
                 value={CURRENCY.format(receitaPeriodo)}
                 hint={`${pedidosPeriodo.toLocaleString("pt-BR")} pedidos · ${periodLabel}`}
+                delta={<KpiDelta current={receitaPeriodo} previous={receitaPeriodoAnterior} />}
               />
             </div>
 
@@ -459,9 +484,15 @@ function GeneralDashboard() {
                                 {aberta ? "Aberta" : "Fechada"}
                               </span>
                             </div>
-                            <p className="shrink-0 text-right font-mono text-sm font-semibold tabular-nums">
-                              {CURRENCY.format(u.receita)}
-                            </p>
+                            <div className="flex shrink-0 flex-col items-end">
+                              <p className="text-right font-mono text-sm font-semibold tabular-nums">
+                                {CURRENCY.format(u.receita)}
+                              </p>
+                              <MicroDelta
+                                current={u.receita}
+                                previous={receitaAnteriorPorUnidade.get(u.unidade_id) ?? 0}
+                              />
+                            </div>
                           </div>
                           <div className="h-1 overflow-hidden rounded-full bg-surface">
                             <div
@@ -574,11 +605,13 @@ function KpiCard({
   value,
   hint,
   danger,
+  delta,
 }: {
   label: string;
   value: string;
   hint: string;
   danger?: boolean;
+  delta?: ReactNode;
 }) {
   return (
     <Card>
@@ -590,6 +623,7 @@ function KpiCard({
           {value}
         </p>
         <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>
+        {delta && <div className="mt-1">{delta}</div>}
       </CardContent>
     </Card>
   );

@@ -61,6 +61,19 @@ export function periodRange(period: PeriodId, custom: CustomRange) {
   return { p_inicio, p_fim, granularidade: granularidadePorDias(dias) };
 }
 
+// Período imediatamente anterior, com a mesma duração — usado pros
+// deltas "↑/↓ vs. período anterior" (item 7 do design system).
+export function previousPeriodRange(p_inicio: string, p_fim: string) {
+  const inicio = parseDateOnly(p_inicio);
+  const fim = parseDateOnly(p_fim);
+  const dias = Math.round((fim.getTime() - inicio.getTime()) / 86_400_000) + 1;
+  const prevFim = new Date(inicio);
+  prevFim.setDate(prevFim.getDate() - 1);
+  const prevInicio = new Date(prevFim);
+  prevInicio.setDate(prevInicio.getDate() - (dias - 1));
+  return { p_inicio: toDateParam(prevInicio), p_fim: toDateParam(prevFim) };
+}
+
 export function defaultCustomRange(): CustomRange {
   const fim = new Date();
   const inicio = new Date(fim);

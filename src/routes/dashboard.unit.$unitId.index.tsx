@@ -34,10 +34,12 @@ import { greetingForHour } from "@/lib/greeting";
 import {
   parseDateOnly,
   periodRange,
+  previousPeriodRange,
   periodLabel as computePeriodLabel,
   defaultCustomRange,
   type PeriodId,
 } from "@/lib/period";
+import { KpiDelta } from "@/components/kpi-delta";
 
 type Plataforma = "ifood" | "rappi" | "proprio";
 
@@ -106,6 +108,7 @@ function UnitDashboardIndex() {
     proprio: 0,
   });
   const [serieFaturamento, setSerieFaturamento] = useState<FaturamentoSerie[]>([]);
+  const [receitaAnterior, setReceitaAnterior] = useState(0);
 
   useEffect(() => {
     if (period === "custom" && (!customRange.inicio || !customRange.fim)) return;
@@ -113,9 +116,15 @@ function UnitDashboardIndex() {
     setLoading(true);
     const { p_inicio, p_fim } = periodRange(period, customRange);
     const fimLimite = `${p_fim}T23:59:59`;
+    const anterior = previousPeriodRange(p_inicio, p_fim);
 
     Promise.all([
       supabase.rpc("rpc_kpis_unidade_periodo", { p_unidade: unit.id, p_inicio, p_fim }),
+      supabase.rpc("rpc_kpis_unidade_periodo", {
+        p_unidade: unit.id,
+        p_inicio: anterior.p_inicio,
+        p_fim: anterior.p_fim,
+      }),
       supabase
         .from("pedidos")
         .select("id, valor, plataforma")
@@ -144,6 +153,7 @@ function UnitDashboardIndex() {
     ]).then(
       ([
         kpisRes,
+        kpisAnteriorRes,
         top5Res,
         tempoRes,
         itensRes,
@@ -153,6 +163,7 @@ function UnitDashboardIndex() {
       ]) => {
         if (!active) return;
         setKpis(kpisRes.data?.[0] ?? null);
+        setReceitaAnterior(kpisAnteriorRes.data?.[0]?.receita ?? 0);
         setTop5(top5Res.data ?? []);
         setTempoMedioPreparo(tempoRes.data ?? null);
         setItensMaisVendidos(itensRes.data ?? []);
@@ -274,9 +285,12 @@ function UnitDashboardIndex() {
                 <Skeleton className="h-16 w-full" />
               ) : (
                 <>
-                  <p className="font-display text-3xl font-bold tabular-nums">
-                    {CURRENCY.format(kpis?.receita ?? 0)}
-                  </p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="font-display text-3xl font-bold tabular-nums">
+                      {CURRENCY.format(kpis?.receita ?? 0)}
+                    </p>
+                    <KpiDelta current={kpis?.receita ?? 0} previous={receitaAnterior} />
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Meta prorrateada: {CURRENCY.format(kpis?.meta ?? 0)}
                   </p>
@@ -366,7 +380,7 @@ function UnitDashboardIndex() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center justify-between text-[11px] text-muted-foreground">
                 Cancelamentos
-                <Ban className="size-3.5 text-destructive" />
+                <Ban className="size-3.5 text-primary" />
               </CardTitle>
             </CardHeader>
             <CardContent>
