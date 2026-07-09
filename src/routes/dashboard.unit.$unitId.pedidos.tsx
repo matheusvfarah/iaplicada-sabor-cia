@@ -1,11 +1,27 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Clock, Flame, PackageCheck, PackageOpen, ChefHat } from "lucide-react";
+import {
+  Clock,
+  Download,
+  Flame,
+  PackageCheck,
+  PackageOpen,
+  ChefHat,
+  ChevronDown,
+  FileText,
+} from "lucide-react";
 import { TopBar } from "@/components/top-bar";
 import { AlertsBadge } from "@/components/alerts-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,6 +34,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/lib/supabase";
 import { CURRENCY_FULL } from "@/lib/currency";
+import { exportCSV, exportPDF } from "@/lib/export";
 import { useUnit } from "@/lib/unit-context";
 import { cn } from "@/lib/utils";
 import { playNotificationSound } from "@/lib/notification-sound";
@@ -48,11 +65,11 @@ const PLATFORM_LABEL: Record<Plataforma, string> = {
   proprio: "Próprio",
 };
 
-// Badges de plataforma seguem o doc: iFood = danger, Rappi = âmbar/marca, Próprio = verde.
-const platformDot: Record<Plataforma, string> = {
-  ifood: "bg-destructive",
-  rappi: "bg-accent",
-  proprio: "bg-success",
+// Badges de plataforma seguem o design system: iFood = danger, Rappi = âmbar/marca, Próprio = verde.
+const PLATFORM_BADGE: Record<Plataforma, string> = {
+  ifood: "bg-danger-tint text-danger-tint-foreground",
+  rappi: "bg-accent-tint text-accent-tint-foreground",
+  proprio: "bg-success-tint text-success-tint-foreground",
 };
 
 export const Route = createFileRoute("/dashboard/unit/$unitId/pedidos")({
@@ -86,6 +103,10 @@ function formatElapsed(min: number) {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function itensResumo(itens: ItemPedido[]) {
+  return itens.map((item) => `${item.quantidade}× ${item.produto?.nome ?? "Item"}`).join(" · ");
 }
 
 function PedidosKanban() {
@@ -225,35 +246,66 @@ function PedidosKanban() {
     setConfirmAction(null);
   }
 
+  const handleExportCSV = () => {
+    exportCSV(
+      `sabor-cia-unidade-${unit.id}-pedidos-hoje`,
+      orders.map((o) => ({
+        codigo: o.codigo,
+        status: o.status,
+        plataforma: PLATFORM_LABEL[o.plataforma],
+        valor: o.valor,
+      })),
+    );
+  };
+
+  const handleExportPDF = () => {
+    exportPDF(
+      `sabor-cia-unidade-${unit.id}-pedidos-hoje`,
+      `Sabor & Cia — ${unit.nome} — Pedidos de hoje`,
+      JSON.stringify(orders, null, 2),
+    );
+  };
+
   return (
     <>
       <TopBar
         title="Pedidos"
-        subtitle="Fila de produção em tempo real"
+        subtitle={`${orders.length} pedidos hoje · Tempo médio ${
+          tempoMedioHoje != null ? `${tempoMedioHoje.toFixed(0)} min` : "—"
+        }`}
         actions={
           <>
-            <div className="hidden items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 sm:flex">
-              <Clock className="size-3.5 text-primary" />
-              <span className="font-mono text-xs text-muted-foreground">
-                Tempo médio hoje:{" "}
-                {tempoMedioHoje != null ? `${tempoMedioHoje.toFixed(0)} min` : "—"}
-              </span>
-            </div>
-            <span className="relative flex size-2">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-60" />
-              <span className="relative inline-flex size-2 rounded-full bg-success" />
-            </span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={loading} className="gap-1.5">
+                  <Download className="size-3.5" />
+                  Exportar
+                  <ChevronDown className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleExportCSV}>
+                  <FileText className="mr-2 size-3.5" />
+                  CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportPDF}>
+                  <FileText className="mr-2 size-3.5" />
+                  PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <AlertsBadge />
           </>
         }
       />
 
       <div className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Desktop: 3 colunas lado a lado */}
+        <div className="hidden gap-4 sm:grid sm:grid-cols-3">
           <KanbanColumn
             title="Recebidos"
             icon={PackageOpen}
-            iconClassName="text-accent-tint-foreground"
+            countTint="bg-accent-tint text-accent-tint-foreground"
             count={columns.recebido.length}
             loading={loading}
             emptyTitle="Nenhum pedido novo"
@@ -272,7 +324,7 @@ function PedidosKanban() {
           <KanbanColumn
             title="Em produção"
             icon={ChefHat}
-            iconClassName="text-primary"
+            countTint="bg-primary/10 text-primary"
             count={columns.preparando.length}
             loading={loading}
             emptyTitle="Nada em produção"
@@ -289,9 +341,9 @@ function PedidosKanban() {
           </KanbanColumn>
 
           <KanbanColumn
-            title="Finalizados (hoje)"
+            title="Finalizados"
             icon={PackageCheck}
-            iconClassName="text-success-tint-foreground"
+            countTint="bg-success-tint text-success-tint-foreground"
             count={columns.entregue.length}
             loading={loading}
             emptyTitle="Nenhum pedido finalizado ainda"
@@ -302,6 +354,91 @@ function PedidosKanban() {
             ))}
           </KanbanColumn>
         </div>
+
+        {/* Mobile: tabs segmentadas por coluna */}
+        <Tabs defaultValue="recebido" className="sm:hidden">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="recebido" className="gap-1.5">
+              Recebidos
+              <Badge variant="outline" className="h-4 min-w-4 justify-center px-1 text-[10px]">
+                {columns.recebido.length}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="preparando" className="gap-1.5">
+              Produção
+              <Badge variant="outline" className="h-4 min-w-4 justify-center px-1 text-[10px]">
+                {columns.preparando.length}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="entregue" className="gap-1.5">
+              Prontos
+              <Badge variant="outline" className="h-4 min-w-4 justify-center px-1 text-[10px]">
+                {columns.entregue.length}
+              </Badge>
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="recebido">
+            <KanbanColumn
+              title="Recebidos"
+              icon={PackageOpen}
+              countTint="bg-accent-tint text-accent-tint-foreground"
+              count={columns.recebido.length}
+              loading={loading}
+              emptyTitle="Nenhum pedido novo"
+              emptyHint="Pedidos aceitos aparecem aqui assim que chegarem."
+              hideHeader
+            >
+              {columns.recebido.map((pedido) => (
+                <PedidoCard
+                  key={pedido.id}
+                  pedido={pedido}
+                  onAceitar={() => updateStatus(pedido, "preparando")}
+                  onRecusar={() => setConfirmAction({ pedido, tipo: "recusar" })}
+                />
+              ))}
+            </KanbanColumn>
+          </TabsContent>
+
+          <TabsContent value="preparando">
+            <KanbanColumn
+              title="Em produção"
+              icon={ChefHat}
+              countTint="bg-primary/10 text-primary"
+              count={columns.preparando.length}
+              loading={loading}
+              emptyTitle="Nada em produção"
+              emptyHint="Aceite um pedido recebido para começar o preparo."
+              hideHeader
+            >
+              {columns.preparando.map((pedido) => (
+                <PedidoCard
+                  key={pedido.id}
+                  pedido={pedido}
+                  onFinalizar={() => updateStatus(pedido, "entregue")}
+                  onCancelar={() => setConfirmAction({ pedido, tipo: "cancelar" })}
+                />
+              ))}
+            </KanbanColumn>
+          </TabsContent>
+
+          <TabsContent value="entregue">
+            <KanbanColumn
+              title="Finalizados"
+              icon={PackageCheck}
+              countTint="bg-success-tint text-success-tint-foreground"
+              count={columns.entregue.length}
+              loading={loading}
+              emptyTitle="Nenhum pedido finalizado ainda"
+              emptyHint="Pedidos entregues hoje aparecem aqui."
+              hideHeader
+            >
+              {columns.entregue.map((pedido) => (
+                <PedidoCard key={pedido.id} pedido={pedido} finalizado />
+              ))}
+            </KanbanColumn>
+          </TabsContent>
+        </Tabs>
       </div>
 
       <AlertDialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
@@ -329,39 +466,48 @@ function PedidosKanban() {
 function KanbanColumn({
   title,
   icon: Icon,
-  iconClassName,
+  countTint,
   count,
   loading,
   emptyTitle,
   emptyHint,
+  hideHeader,
   children,
 }: {
   title: string;
   icon: typeof PackageOpen;
-  iconClassName?: string;
+  countTint: string;
   count: number;
   loading: boolean;
   emptyTitle: string;
   emptyHint: string;
+  hideHeader?: boolean;
   children: React.ReactNode;
 }) {
   const isEmpty = !loading && count === 0;
   return (
-    <div className="flex min-w-0 flex-col rounded-xl border border-border bg-card">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Icon className={cn("size-4", iconClassName ?? "text-primary")} />
-          <h2 className="font-display text-sm font-semibold">{title}</h2>
+    <div className="flex min-w-0 flex-col rounded-xl bg-[#F3EDE1] p-3 dark:bg-secondary">
+      {!hideHeader && (
+        <div className="mb-3 flex items-center justify-between px-0.5">
+          <div className="flex items-center gap-1.5">
+            <Icon className="size-3.5 text-muted-foreground" />
+            <h2 className="text-[13px] font-medium">{title}</h2>
+          </div>
+          <span
+            className={cn(
+              "grid h-5 min-w-5 place-items-center rounded-full px-1.5 font-mono text-[10px] font-semibold",
+              countTint,
+            )}
+          >
+            {count}
+          </span>
         </div>
-        <Badge variant="outline" className="font-mono text-[10px]">
-          {count}
-        </Badge>
-      </div>
-      <div className="flex-1 space-y-3 p-3">
+      )}
+      <div className="flex-1 space-y-2">
         {loading ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="h-32 animate-pulse rounded-lg bg-surface" />
+              <div key={i} className="h-28 animate-pulse rounded-[10px] bg-surface" />
             ))}
           </div>
         ) : isEmpty ? (
@@ -403,47 +549,40 @@ function PedidoCard({
       : null;
 
   const urgente = (isRecebido && (elapsed ?? 0) > 5) || (isPreparando && (elapsed ?? 0) > 20);
+  const resumo = itensResumo(pedido.itens);
 
   return (
     <div
       className={cn(
-        "animate-in fade-in slide-in-from-top-2 rounded-lg border p-3 duration-300",
-        urgente
-          ? "border-destructive/40 bg-destructive/5"
-          : finalizado
-            ? "border-border bg-surface/60 opacity-80"
-            : "border-border bg-surface",
+        "animate-in fade-in slide-in-from-top-2 rounded-[10px] border border-border bg-surface p-3 duration-300",
+        finalizado && "opacity-75",
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="font-mono text-sm font-bold">{pedido.codigo ?? `#${pedido.id}`}</p>
-          <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className={cn("size-1.5 rounded-full", platformDot[pedido.plataforma])} />
+      {/* linha 1: código + badge plataforma + valor */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <p className="shrink-0 font-mono text-sm font-bold">{pedido.codigo ?? `#${pedido.id}`}</p>
+          <Badge className={cn("shrink-0 border-none text-[10px]", PLATFORM_BADGE[pedido.plataforma])}>
             {PLATFORM_LABEL[pedido.plataforma]}
-          </span>
+          </Badge>
         </div>
-        <p className="shrink-0 font-mono text-sm font-semibold">
+        <p className="shrink-0 font-mono text-sm font-semibold tabular-nums">
           {CURRENCY_FULL.format(pedido.valor)}
         </p>
       </div>
 
-      {pedido.itens.length > 0 && (
-        <ul className="mt-2 space-y-0.5 border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
-          {pedido.itens.map((item, i) => (
-            <li key={i} className="truncate">
-              {item.quantidade}× {item.produto?.nome ?? "Item"}
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* linha 2: itens resumidos */}
+      {resumo && <p className="mt-1.5 truncate text-[12px] text-muted-foreground">{resumo}</p>}
 
-      <div className="mt-2 flex items-center justify-between">
+      {/* linha 3: cronômetro + ações */}
+      <div className="mt-2.5 flex items-center justify-between gap-2">
         {elapsed != null ? (
           <span
             className={cn(
-              "flex items-center gap-1 font-mono text-xs",
-              urgente ? "font-bold text-destructive" : "text-muted-foreground",
+              "flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[11px] font-medium",
+              urgente
+                ? "bg-danger-tint text-danger-tint-foreground"
+                : "bg-accent-tint text-accent-tint-foreground",
             )}
           >
             <Clock className="size-3" />
@@ -460,18 +599,33 @@ function PedidoCard({
               })}
           </span>
         )}
-      </div>
 
-      {(onAceitar || onFinalizar) && (
-        <div className="mt-3 flex gap-2">
-          <Button variant="outline" size="sm" className="flex-1" onClick={onRecusar ?? onCancelar}>
-            {onRecusar ? "Recusar" : "Cancelar"}
-          </Button>
-          <Button size="sm" className="flex-1" onClick={onAceitar ?? onFinalizar}>
-            {onAceitar ? "Aceitar pedido" : "Finalizar"}
-          </Button>
-        </div>
-      )}
+        {(onAceitar || onFinalizar) && (
+          <div className="flex shrink-0 gap-1.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-danger-tint-foreground hover:bg-danger-tint hover:text-danger-tint-foreground"
+              onClick={onRecusar ?? onCancelar}
+            >
+              {onRecusar ? "Recusar" : "Cancelar"}
+            </Button>
+            {onAceitar ? (
+              <Button
+                size="sm"
+                className="h-7 bg-success px-3 text-success-foreground hover:bg-success/90"
+                onClick={onAceitar}
+              >
+                Aceitar
+              </Button>
+            ) : (
+              <Button size="sm" className="h-7 px-3" onClick={onFinalizar}>
+                Finalizar
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
