@@ -39,6 +39,57 @@ Configuração em produção: `ORDER_SIMULATOR_SECRET` como variável de ambient
 no n8n (nunca hardcoded no workflow), URL do endpoint apontando pro deploy
 Vercel.
 
+### Contrato do endpoint `/api/pedidos/simular`
+
+**Por que uma rota no próprio app em vez de uma Supabase Edge Function:**
+o app já roda num handler `fetch` central (`src/server.ts`, usado pelo
+TanStack Start/Nitro em produção) — interceptar um path ali é uma linha a
+mais de código e reaproveita o mesmo deploy (Vercel), sem precisar gerenciar
+um segundo artefato de deploy (a Edge Function do Supabase), uma segunda
+env var store, e um segundo CLI de deploy. Como o app já é servido via SSR
+com um servidor de verdade por trás (não é um SPA estático), essa rota
+"custa" a mesma infra que já existe. O trade-off: se o app cair, o endpoint
+cai junto (com uma Edge Function eles seriam independentes) — aceitável
+pro escopo do teste.
+
+**Request**
+
+```
+POST /api/pedidos/simular
+Content-Type: application/json
+x-webhook-secret: <ORDER_SIMULATOR_SECRET>
+
+{
+  "unidade_id": 1,
+  "plataforma": "ifood",
+  "itens": [
+    { "produto_id": 3, "quantidade": 2 }
+  ]
+}
+```
+
+- `plataforma`: `"ifood" | "rappi" | "proprio"`
+- `itens`: 1 a 10 itens, `produto_id` deve existir, pertencer à `unidade_id`
+  informada e estar com `disponivel = true` — item pausado é rejeitado.
+- O servidor busca o `preco` atual de cada produto e calcula o `valor` do
+  pedido — o preço enviado no payload (se enviado) é ignorado.
+- O `codigo` (ex. `#341A`) é gerado automaticamente pelo banco a partir do
+  `id` do pedido (coluna `generated always as`) — o n8n não precisa (nem
+  consegue) enviá-lo.
+- Pedido entra com status `pendente` (fluxo de aceite/recusa via popup no
+  Dashboard da Unidade, não `recebido` direto — ver decisão acima).
+
+**Responses**
+
+| Status | Corpo                                                               | Quando                                         |
+| ------ | ------------------------------------------------------------------- | ---------------------------------------------- |
+| `201`  | `{ "id": 13425 }`                                                   | Pedido criado com sucesso                      |
+| `400`  | `{ "error": "invalid payload", "issues": [...] }`                   | Corpo não bate com o schema (zod)              |
+| `400`  | `{ "error": "produto X indisponível ou não pertence à unidade Y" }` | Item pausado, inexistente ou de outra unidade  |
+| `401`  | `{ "error": "unauthorized" }`                                       | Header `x-webhook-secret` ausente ou incorreto |
+| `405`  | `{ "error": "method not allowed" }`                                 | Método diferente de `POST`                     |
+| `500`  | `{ "error": "ORDER_SIMULATOR_SECRET não configurado no servidor" }` | Variável de ambiente ausente no deploy         |
+
 ## Nesta pasta (quando concluído)
 
 - `*.json` — workflows exportados do n8n
