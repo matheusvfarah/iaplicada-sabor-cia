@@ -255,6 +255,7 @@ try {
   await db.exec(`set role test_gestor; set app.uid = '00000000-0000-0000-0000-000000000001';`);
   const r = await db.query(`update unidades set status = 'inativa' where id = 1 returning status`);
   gestorMudaStatus = r.rows.length === 1 && r.rows[0].status === "inativa";
+  await db.query(`update unidades set status = 'ativa' where id = 1`);
   await db.exec("reset role; reset app.uid;");
 } catch (e) {
   console.error("FAIL: gestor deveria poder ativar/desativar unidade ->", e.message);
@@ -286,9 +287,13 @@ if (configUpdate.rows.length !== 1) {
 }
 
 // Notificações: RLS só enxerga/edita a própria -----------------
+// tipo 'vai_abrir' de propósito (não 'vai_fechar') pra não colidir
+// com o dedupe (profile_id, unidade_id, tipo, dia) do teste funcional
+// de gerar_notificacoes() mais abaixo, que testa 'vai_fechar' na
+// mesma unidade 1.
 await db.query(`
   insert into notificacoes (profile_id, unidade_id, tipo, titulo, mensagem) values
-    ('00000000-0000-0000-0000-000000000001', 1, 'vai_fechar', 'Centro fecha em 20 min', 'msg'),
+    ('00000000-0000-0000-0000-000000000001', 1, 'vai_abrir', 'Centro abre em 20 min', 'msg'),
     ('00000000-0000-0000-0000-000000000002', 1, 'pedido_novo', 'Pedido novo', 'msg');
 `);
 
@@ -340,6 +345,125 @@ if (
   gerenteMarcaPropriaLida[0]?.lida !== true
 ) {
   console.error("FAIL RLS notificações");
+  process.exit(1);
+}
+
+// gerar_notificacoes(): auto-cancel ------------------------------
+// unidade 1 tem gerente (profile 2) + gestor (profile 1) nos fixtures
+// de teste — dá pra conferir os dois destinatários de uma vez.
+const [{ id: pedidoAutoCancel }] = (
+  await db.query(
+    `insert into pedidos (unidade_id, valor, plataforma, status, data_pedido)
+     values (1, 42.00, 'ifood', 'recebido', now() - interval '2 hours')
+     returning id`,
+  )
+).rows;
+
+await db.query("select gerar_notificacoes()");
+
+const pedidoAposCron = (await db.query(`select status from pedidos where id = ${pedidoAutoCancel}`))
+  .rows[0];
+console.log(
+  "Auto-cancel: pedido recebido antigo vira cancelado:",
+  pedidoAposCron.status === "cancelado",
+  "(esperado true)",
+);
+
+const notifCancelAuto = (
+  await db.query(
+    `select profile_id from notificacoes where ref_pedido_id = ${pedidoAutoCancel} and tipo = 'pedido_cancelado_auto'`,
+  )
+).rows;
+console.log(
+  "Auto-cancel: gerente + gestor notificados:",
+  notifCancelAuto.length === 2,
+  "(esperado true, veio",
+  notifCancelAuto.length + ")",
+);
+
+// Dedupe: rodar de novo não duplica a notificação (pedido já não está
+// mais 'recebido', então nem entraria no loop de novo, mas o dedupe
+// por (profile_id, tipo, ref_pedido_id) é a rede de segurança real).
+await db.query("select gerar_notificacoes()");
+const notifCancelAutoDepoisDeNovo = (
+  await db.query(
+    `select id from notificacoes where ref_pedido_id = ${pedidoAutoCancel} and tipo = 'pedido_cancelado_auto'`,
+  )
+).rows;
+console.log(
+  "Dedupe: rodar o cron de novo não duplica a notificação:",
+  notifCancelAutoDepoisDeNovo.length === 2,
+  "(esperado true)",
+);
+
+// gerar_notificacoes(): atrasado ----------------------------------
+const [{ id: pedidoAtrasado }] = (
+  await db.query(
+    `insert into pedidos (unidade_id, valor, plataforma, status, data_pedido, preparando_em)
+     values (1, 55.00, 'rappi', 'preparando', now() - interval '3 hours', now() - interval '3 hours')
+     returning id`,
+  )
+).rows;
+
+await db.query("select gerar_notificacoes()");
+
+const notifAtrasado = (
+  await db.query(
+    `select profile_id from notificacoes where ref_pedido_id = ${pedidoAtrasado} and tipo = 'pedido_atrasado'`,
+  )
+).rows;
+console.log(
+  "Atrasado: gerente + gestor notificados uma vez:",
+  notifAtrasado.length === 2,
+  "(esperado true)",
+);
+
+await db.query("select gerar_notificacoes()");
+const notifAtrasadoDepoisDeNovo = (
+  await db.query(
+    `select id from notificacoes where ref_pedido_id = ${pedidoAtrasado} and tipo = 'pedido_atrasado'`,
+  )
+).rows;
+console.log(
+  "Dedupe: atrasado não duplica rodando o cron de novo:",
+  notifAtrasadoDepoisDeNovo.length === 2,
+  "(esperado true)",
+);
+
+// gerar_notificacoes(): vai abrir / vai fechar ---------------------
+// Empurra abertura pra 1h atrás e fechamento pra 20 min à frente —
+// garante que a unidade está "aberta" agora (independente da hora
+// real em que o teste roda) e cai na janela de 30 min pra fechar.
+const janelaFechamento = await db.query(
+  `select to_char(now() - interval '1 hour', 'HH24:MI:SS') as abertura,
+          to_char(now() + interval '20 minutes', 'HH24:MI:SS') as fechamento`,
+);
+await db.query(
+  `update unidades
+   set horario_abertura = '${janelaFechamento.rows[0].abertura}',
+       horario_fechamento = '${janelaFechamento.rows[0].fechamento}'
+   where id = 1`,
+);
+await db.query("select gerar_notificacoes()");
+
+const notifVaiFechar = (
+  await db.query(`select profile_id from notificacoes where unidade_id = 1 and tipo = 'vai_fechar'`)
+).rows;
+console.log(
+  "Vai fechar: gerente + gestor notificados dentro da janela de 30 min:",
+  notifVaiFechar.length === 2,
+  "(esperado true)",
+);
+
+if (
+  pedidoAposCron.status !== "cancelado" ||
+  notifCancelAuto.length !== 2 ||
+  notifCancelAutoDepoisDeNovo.length !== 2 ||
+  notifAtrasado.length !== 2 ||
+  notifAtrasadoDepoisDeNovo.length !== 2 ||
+  notifVaiFechar.length !== 2
+) {
+  console.error("FAIL gerar_notificacoes()");
   process.exit(1);
 }
 

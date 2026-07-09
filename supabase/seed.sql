@@ -188,6 +188,11 @@ linhas_tempos as (
           + case when r_turno < 0.40
                  then make_interval(hours => 11, mins => (r_hora * 180)::int)
                  else make_interval(hours => 18, mins => (r_hora * 240)::int) end
+      -- 'recebido' de hoje precisa nascer recente (< tempo_limite_aceite_min,
+      -- default 5 min) — senão o cron de notificações (gerar_notificacoes)
+      -- cancela e esvazia a coluna "Recebidos" do kanban assim que roda
+      -- pela primeira vez após o seed.
+      when status = 'recebido' then now() - make_interval(mins => (r_hora * 4)::int)
       else least(now() - make_interval(mins => (r_hora * 360)::int), now())
     end as data_pedido,
     r_prep_start, r_prep_dur
@@ -195,9 +200,14 @@ linhas_tempos as (
 ),
 linhas_finais as (
   select uid, plataforma, status, data_pedido,
-    case when status in ('preparando', 'entregue')
-      then data_pedido + make_interval(mins => (5 + r_prep_start * 10)::int)
-      else null end as preparando_em,
+    case
+      -- 'preparando' só existe pra pedidos de hoje (ver linhas_status) e
+      -- precisa nascer dentro do limite_atraso_min da unidade (default
+      -- 20 min) — senão todo pedido em produção já nasce "atrasado".
+      when status = 'preparando' then now() - make_interval(mins => (r_prep_start * 15)::int)
+      when status = 'entregue' then data_pedido + make_interval(mins => (5 + r_prep_start * 10)::int)
+      else null
+    end as preparando_em,
     r_prep_dur
   from linhas_tempos
 ),
