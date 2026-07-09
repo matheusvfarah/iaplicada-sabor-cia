@@ -127,6 +127,7 @@ export function AppSidebar() {
   useMinuteTick();
 
   const currentUnit = unidades.find((u) => u.id === activeUnitId) ?? null;
+  const currentUnitInativa = currentUnit?.status === "inativa";
   const currentUnitAberta =
     !!currentUnit && currentUnit.status === "ativa" && isUnidadeAberta(currentUnit);
 
@@ -159,25 +160,34 @@ export function AppSidebar() {
                     className="flex justify-center py-1"
                     title={
                       currentUnit
-                        ? `${currentUnit.nome} · ${currentUnitAberta ? "Aberta" : "Fechada"}`
+                        ? `${currentUnit.nome} · ${currentUnitInativa ? "Inativa" : currentUnitAberta ? "Aberta" : "Fechada"}`
                         : undefined
                     }
                   >
-                    <span
-                      className={cn("size-2 rounded-full", statusDotClass(currentUnitAberta))}
-                    />
+                    {!currentUnitInativa && (
+                      <span
+                        className={cn("size-2 rounded-full", statusDotClass(currentUnitAberta))}
+                      />
+                    )}
                   </div>
                 ) : isAdmin ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button className="flex w-full items-center gap-2 rounded-lg bg-sidebar-accent/60 px-3 py-2.5 text-left hover:bg-sidebar-accent">
+                        {!currentUnitInativa && (
+                          <span
+                            className={cn(
+                              "size-1.5 shrink-0 rounded-full",
+                              statusDotClass(currentUnitAberta),
+                            )}
+                          />
+                        )}
                         <span
                           className={cn(
-                            "size-1.5 shrink-0 rounded-full",
-                            statusDotClass(currentUnitAberta),
+                            "min-w-0 flex-1 truncate text-xs font-semibold text-sidebar-foreground",
+                            currentUnitInativa && "opacity-45",
                           )}
-                        />
-                        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-sidebar-foreground">
+                        >
                           {currentUnit?.nome ?? "Unidade"}
                         </span>
                         <ChevronDown className="size-3.5 shrink-0 text-sidebar-foreground/60" />
@@ -185,7 +195,19 @@ export function AppSidebar() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-56">
                       {unidades.map((u) => {
-                        const aberta = u.status === "ativa" && isUnidadeAberta(u);
+                        if (u.status === "inativa") {
+                          return (
+                            <DropdownMenuItem
+                              key={u.id}
+                              disabled
+                              className="opacity-45"
+                              title="Unidade inativa"
+                            >
+                              <span className="truncate">{u.nome}</span>
+                            </DropdownMenuItem>
+                          );
+                        }
+                        const aberta = isUnidadeAberta(u);
                         return (
                           <DropdownMenuItem key={u.id} onClick={() => switchUnit(u.id)}>
                             <span
@@ -206,12 +228,15 @@ export function AppSidebar() {
                       {currentUnit?.nome ?? "Unidade"}
                     </p>
                     <div className="mt-1 flex items-center gap-1.5">
-                      <span
-                        className={cn("size-1.5 rounded-full", statusDotClass(currentUnitAberta))}
-                      />
+                      {!currentUnitInativa && (
+                        <span
+                          className={cn("size-1.5 rounded-full", statusDotClass(currentUnitAberta))}
+                        />
+                      )}
                       <span className="text-[10px] text-sidebar-foreground/60">
-                        {currentUnitAberta ? "Aberta" : "Fechada"} · {pedidosHoje} pedido
-                        {pedidosHoje === 1 ? "" : "s"} hoje
+                        {currentUnitInativa
+                          ? "Inativa"
+                          : `${currentUnitAberta ? "Aberta" : "Fechada"} · ${pedidosHoje} pedido${pedidosHoje === 1 ? "" : "s"} hoje`}
                       </span>
                     </div>
                   </div>
@@ -353,7 +378,20 @@ export function AppSidebar() {
               <SidebarGroupContent>
                 <SidebarMenu>
                   {unidades.map((u) => {
-                    const aberta = u.status === "ativa" && isUnidadeAberta(u);
+                    if (u.status === "inativa") {
+                      return (
+                        <SidebarMenuItem key={u.id}>
+                          <div
+                            className="flex w-full cursor-default items-center gap-2 rounded-md p-2 text-sm opacity-45"
+                            title={`${u.nome} · Inativa`}
+                          >
+                            <Store className="size-4 shrink-0" />
+                            {!collapsed && <span className="flex-1 truncate">{u.nome}</span>}
+                          </div>
+                        </SidebarMenuItem>
+                      );
+                    }
+                    const aberta = isUnidadeAberta(u);
                     return (
                       <SidebarMenuItem key={u.id} className="relative">
                         <SidebarMenuButton asChild tooltip={u.nome}>
