@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound, Outlet, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
@@ -19,11 +19,8 @@ import { UnitContext } from "@/lib/unit-context";
 import { useSession } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { CURRENCY_FULL } from "@/lib/currency";
-import {
-  minutosParaProximaVirada,
-  useMinuteTick,
-  type HorarioFuncionamento,
-} from "@/lib/unidade-status";
+import { type HorarioFuncionamento } from "@/lib/unidade-status";
+import { useHorarioAlertas } from "@/lib/use-horario-alertas";
 
 type Plataforma = "ifood" | "rappi" | "proprio";
 
@@ -101,7 +98,9 @@ function UnitLayout() {
   const { session, ready } = useSession();
   const navigate = useNavigate();
   const [unit, setUnit] = useState<{ id: number; nome: string } | null>(null);
-  const [horario, setHorario] = useState<HorarioFuncionamento | null>(null);
+  const [horario, setHorario] = useState<
+    (HorarioFuncionamento & { status: "ativa" | "inativa" }) | null
+  >(null);
   const [unitNotFound, setUnitNotFound] = useState(false);
   const [pendingQueue, setPendingQueue] = useState<Pedido[]>([]);
   const [pendingItens, setPendingItens] = useState<PedidoItemDetalhe[]>([]);
@@ -132,7 +131,7 @@ function UnitLayout() {
     let active = true;
     supabase
       .from("unidades")
-      .select("id, nome, horario_abertura, horario_fechamento")
+      .select("id, nome, status, horario_abertura, horario_fechamento")
       .eq("id", unidadeId)
       .single()
       .then(({ data, error }) => {
@@ -143,6 +142,7 @@ function UnitLayout() {
         }
         setUnit({ id: data.id, nome: data.nome });
         setHorario({
+          status: data.status,
           horario_abertura: data.horario_abertura,
           horario_fechamento: data.horario_fechamento,
         });
@@ -153,29 +153,13 @@ function UnitLayout() {
   }, [unidadeId]);
 
   // Aviso 30 min antes de abrir/fechar: banner discreto + toast único
-  // quando cruza o limiar (não repete a cada tick de 1 min).
-  useMinuteTick();
-  const proximaVirada = horario ? minutosParaProximaVirada(horario) : null;
-  const showBanner = !!proximaVirada && proximaVirada.minutos <= 30;
-  const lastNotifiedRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!unit) return;
-    if (showBanner && proximaVirada) {
-      const key = `${unit.id}-${proximaVirada.tipo}`;
-      if (lastNotifiedRef.current !== key) {
-        lastNotifiedRef.current = key;
-        toast(
-          proximaVirada.tipo === "fecha"
-            ? `${unit.nome} fecha em ${proximaVirada.minutos} min`
-            : `${unit.nome} abre em ${proximaVirada.minutos} min`,
-        );
-      }
-    } else {
-      lastNotifiedRef.current = null;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- só o cruzamento do limiar deve disparar o toast
-  }, [showBanner, proximaVirada?.tipo, unit?.id]);
+  // por dia (hook único, ver item 1 — dedupe persistido em localStorage).
+  const unidadesParaAlerta = useMemo(
+    () => (unit && horario ? [{ ...horario, id: unit.id, nome: unit.nome }] : []),
+    [unit, horario],
+  );
+  const { alertas: horarioAlertas } = useHorarioAlertas(unidadesParaAlerta, true);
+  const proximaVirada = horarioAlertas[0] ?? null;
 
   // Fila de pedidos pendentes (chegada simulada) — global à área da
   // unidade, aparece em qualquer subpágina (Dashboard/Pedidos/Cardápio).
@@ -359,7 +343,7 @@ function UnitLayout() {
           </DialogContent>
         </Dialog>
 
-        {showBanner && proximaVirada && (
+        {proximaVirada && (
           <div className="flex items-center justify-center gap-1.5 border-b border-border bg-accent-tint px-4 py-1.5 text-center text-xs font-medium text-accent-tint-foreground">
             <Clock className="size-3.5 shrink-0" />
             {proximaVirada.tipo === "fecha"

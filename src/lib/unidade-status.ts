@@ -5,6 +5,23 @@ export type HorarioFuncionamento = {
   horario_fechamento: string;
 };
 
+const SP_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Sao_Paulo",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+// Horário de funcionamento é sempre em America/Sao_Paulo, independente
+// do fuso do navegador de quem está olhando (ex.: gestor acessando de
+// outro fuso não pode ver a unidade "fechada" na hora errada).
+function nowMinutesInSaoPaulo(now: Date) {
+  const parts = SP_TIME_FORMATTER.formatToParts(now);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  return hour * 60 + minute;
+}
+
 function toMinutes(hhmm: string) {
   const [h, m] = hhmm.split(":").map(Number);
   return h * 60 + m;
@@ -14,7 +31,7 @@ function toMinutes(hhmm: string) {
 export function isUnidadeAberta(h: HorarioFuncionamento, now = new Date()): boolean {
   const openMin = toMinutes(h.horario_abertura);
   const closeMin = toMinutes(h.horario_fechamento);
-  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const nowMin = nowMinutesInSaoPaulo(now);
   if (closeMin === openMin) return true; // 24h
   if (closeMin > openMin) return nowMin >= openMin && nowMin < closeMin;
   return nowMin >= openMin || nowMin < closeMin;
@@ -22,7 +39,7 @@ export function isUnidadeAberta(h: HorarioFuncionamento, now = new Date()): bool
 
 function minutesUntil(targetHHMM: string, now = new Date()) {
   const targetMin = toMinutes(targetHHMM);
-  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const nowMin = nowMinutesInSaoPaulo(now);
   let diff = targetMin - nowMin;
   if (diff < 0) diff += 24 * 60;
   if (diff === 0) diff = 24 * 60;

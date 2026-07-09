@@ -35,6 +35,7 @@ function ConfiguracoesPage() {
   const [detalhe, setDetalhe] = useState<UnidadeDetalhe | null>(null);
   const [tema, setTema] = useState<Theme>("dark");
   const [somPedido, setSomPedido] = useState(true);
+  const [somAvisosHorario, setSomAvisosHorario] = useState(true);
   const [horarioAbertura, setHorarioAbertura] = useState("11:00");
   const [horarioFechamento, setHorarioFechamento] = useState("23:00");
   const [salvandoHorario, setSalvandoHorario] = useState(false);
@@ -42,6 +43,7 @@ function ConfiguracoesPage() {
   useEffect(() => {
     setTema(getStoredTheme());
     setSomPedido(localStorage.getItem("sabor-cia-som-pedido") !== "false");
+    setSomAvisosHorario(localStorage.getItem("sabor-cia-som-avisos-horario") !== "false");
 
     let active = true;
     supabase
@@ -89,6 +91,14 @@ function ConfiguracoesPage() {
     setSomPedido(ligado);
     localStorage.setItem("sabor-cia-som-pedido", String(ligado));
     toast.success(ligado ? "Som de novo pedido ativado" : "Som de novo pedido desativado");
+  }
+
+  function handleToggleSomAvisosHorario(ligado: boolean) {
+    setSomAvisosHorario(ligado);
+    localStorage.setItem("sabor-cia-som-avisos-horario", String(ligado));
+    toast.success(
+      ligado ? "Som de avisos de horário ativado" : "Som de avisos de horário desativado",
+    );
   }
 
   async function handleSair() {
@@ -205,6 +215,15 @@ function ConfiguracoesPage() {
                 </p>
               </div>
               <Switch checked={somPedido} onCheckedChange={handleToggleSom} />
+            </div>
+            <div className="flex items-center justify-between border-t border-border pt-4">
+              <div>
+                <Label className="text-sm font-medium">Som de avisos de horário</Label>
+                <p className="text-xs text-muted-foreground">
+                  Toca quando a unidade está a 30 min de abrir ou fechar
+                </p>
+              </div>
+              <Switch checked={somAvisosHorario} onCheckedChange={handleToggleSomAvisosHorario} />
             </div>
           </CardContent>
         </Card>

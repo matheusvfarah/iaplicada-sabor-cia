@@ -33,6 +33,7 @@ function RedeConfiguracoesPage() {
   const navigate = useNavigate();
   const { session } = useSession();
   const [tema, setTema] = useState<Theme>("dark");
+  const [somAvisosHorario, setSomAvisosHorario] = useState(true);
   const [unidades, setUnidades] = useState<UnidadeResumo[]>([]);
   const [loadingUnidades, setLoadingUnidades] = useState(true);
   const [pendingToggle, setPendingToggle] = useState<UnidadeResumo | null>(null);
@@ -40,6 +41,7 @@ function RedeConfiguracoesPage() {
 
   useEffect(() => {
     setTema(getStoredTheme());
+    setSomAvisosHorario(localStorage.getItem("sabor-cia-som-avisos-horario") !== "false");
     supabase
       .from("unidades")
       .select("id, nome, status")
@@ -54,6 +56,14 @@ function RedeConfiguracoesPage() {
     const novoTema: Theme = escuro ? "dark" : "light";
     setTema(novoTema);
     applyTheme(novoTema);
+  }
+
+  function handleToggleSomAvisosHorario(ligado: boolean) {
+    setSomAvisosHorario(ligado);
+    localStorage.setItem("sabor-cia-som-avisos-horario", String(ligado));
+    toast.success(
+      ligado ? "Som de avisos de horário ativado" : "Som de avisos de horário desativado",
+    );
   }
 
   async function handleConfirmarToggle() {
@@ -152,6 +162,15 @@ function RedeConfiguracoesPage() {
                 <p className="text-xs text-muted-foreground">Tema visual do painel</p>
               </div>
               <Switch checked={tema === "dark"} onCheckedChange={handleToggleTema} />
+            </div>
+            <div className="flex items-center justify-between border-t border-border pt-4">
+              <div>
+                <Label className="text-sm font-medium">Som de avisos de horário</Label>
+                <p className="text-xs text-muted-foreground">
+                  Toca quando uma unidade está a 30 min de abrir ou fechar
+                </p>
+              </div>
+              <Switch checked={somAvisosHorario} onCheckedChange={handleToggleSomAvisosHorario} />
             </div>
           </CardContent>
         </Card>
