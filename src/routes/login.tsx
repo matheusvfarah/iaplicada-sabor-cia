@@ -66,9 +66,7 @@ function LoginPage() {
           <BrandLogo size="lg" showText={false} />
           <div className="text-center">
             <h1 className="font-display text-2xl font-bold tracking-tight">Sabor & Cia</h1>
-            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-              Acesso Operacional
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">Acesso operacional</p>
           </div>
         </div>
 
@@ -77,7 +75,7 @@ function LoginPage() {
           className="space-y-5 rounded-2xl border border-border bg-card p-8 shadow-2xl shadow-black/40"
         >
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-xs uppercase tracking-wider">
+            <Label htmlFor="email" className="text-xs font-medium">
               E-mail
             </Label>
             <Input
@@ -90,7 +88,7 @@ function LoginPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password" className="text-xs uppercase tracking-wider">
+            <Label htmlFor="password" className="text-xs font-medium">
               Senha
             </Label>
             <Input

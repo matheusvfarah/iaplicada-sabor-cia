@@ -32,7 +32,7 @@ function Index() {
     <div className="grid min-h-screen place-items-center bg-background">
       <div className="flex flex-col items-center gap-4 text-muted-foreground">
         <BrandLogo size="lg" showText={false} />
-        <p className="font-mono text-xs uppercase tracking-widest">Carregando operação…</p>
+        <p className="text-xs">Carregando operação…</p>
       </div>
     </div>
   );

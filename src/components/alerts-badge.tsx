@@ -91,7 +91,7 @@ export function AlertsBadge() {
         <div className="max-h-80 overflow-auto">
           {alertas.length === 0 ? (
             <div className="flex flex-col items-center gap-2 p-8 text-center">
-              <CheckCircle2 className="size-6 text-emerald-500" />
+              <CheckCircle2 className="size-6 text-success" />
               <p className="text-xs text-muted-foreground">Tudo em dia por aqui.</p>
             </div>
           ) : (

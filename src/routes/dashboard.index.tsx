@@ -239,13 +239,11 @@ function GeneralDashboard() {
             </Button>
             <div className="flex size-2 items-center justify-center">
               <span className="relative flex size-2">
-                <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-60" />
-                <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-60" />
+                <span className="relative inline-flex size-2 rounded-full bg-success" />
               </span>
             </div>
-            <span className="hidden font-mono text-[10px] uppercase tracking-widest text-muted-foreground sm:inline">
-              Live
-            </span>
+            <span className="hidden text-[11px] text-muted-foreground sm:inline">Live</span>
             <AlertsBadge />
           </>
         }
@@ -255,7 +253,7 @@ function GeneralDashboard() {
         {/* Filter row */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               Período
             </p>
             <p className="mt-1 font-display text-lg font-semibold">
@@ -285,10 +283,12 @@ function GeneralDashboard() {
                 <CardContent className="p-5">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                      <p className="text-[11px] text-muted-foreground">
                         Meta do Período
                       </p>
-                      <p className="mt-1 font-display text-3xl font-bold">{gaugePct.toFixed(1)}%</p>
+                      <p className="mt-1 font-display text-3xl font-bold tabular-nums">
+                        {gaugePct.toFixed(1)}%
+                      </p>
                       <p className="mt-1 text-[11px] text-muted-foreground">
                         {CURRENCY.format(receitaPeriodo)} de {CURRENCY.format(metaPeriodo)}
                       </p>
@@ -296,7 +296,7 @@ function GeneralDashboard() {
                         Meta mensal prorrateada · {periodLabel}
                       </p>
                     </div>
-                    <Gauge value={Math.min(100, gaugePct)} />
+                    <Gauge value={Math.min(100, gaugePct)} over={gaugePct > 100} />
                   </div>
                 </CardContent>
               </Card>
@@ -310,7 +310,7 @@ function GeneralDashboard() {
                 label="Cancelamentos"
                 value={`${cancelamentoRedeTaxa.toFixed(1)}%`}
                 hint={periodLabel}
-                accent
+                danger
               />
               <KpiCard
                 label="Faturamento Total"
@@ -403,7 +403,7 @@ function GeneralDashboard() {
                             <p className="min-w-0 truncate text-sm font-semibold">
                               {u.unidade_nome}
                             </p>
-                            <p className="shrink-0 text-right font-mono text-sm font-semibold">
+                            <p className="shrink-0 text-right font-mono text-sm font-semibold tabular-nums">
                               {CURRENCY.format(u.receita)}
                             </p>
                           </div>
@@ -445,7 +445,7 @@ function GeneralDashboard() {
                             </p>
                             <Store className="size-3.5 text-muted-foreground" />
                           </div>
-                          <p className="mt-1 font-display text-xl font-bold">
+                          <p className="mt-1 font-display text-xl font-bold tabular-nums">
                             {CURRENCY.format(u.ticket_medio)}
                           </p>
                           <p className="mt-0.5 text-[10px] text-muted-foreground">
@@ -517,20 +517,20 @@ function KpiCard({
   label,
   value,
   hint,
-  accent,
+  danger,
 }: {
   label: string;
   value: string;
   hint: string;
-  accent?: boolean;
+  danger?: boolean;
 }) {
   return (
     <Card>
       <CardContent className="p-5">
-        <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          {label}
-        </p>
-        <p className={`mt-1 font-display text-3xl font-bold ${accent ? "text-primary" : ""}`}>
+        <p className="text-[11px] text-muted-foreground">{label}</p>
+        <p
+          className={`mt-1 font-display text-3xl font-bold tabular-nums ${danger ? "text-danger-tint-foreground" : ""}`}
+        >
           {value}
         </p>
         <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>
@@ -553,12 +553,13 @@ function EmptyState({ title, hint }: { title: string; hint: string }) {
   );
 }
 
-function Gauge({ value }: { value: number }) {
+function Gauge({ value, over }: { value: number; over?: boolean }) {
   const size = 64;
   const stroke = 6;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const offset = c - (value / 100) * c;
+  const ringColor = over ? "var(--accent)" : "var(--success)";
   return (
     <div className="relative grid place-items-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
@@ -574,7 +575,7 @@ function Gauge({ value }: { value: number }) {
           cx={size / 2}
           cy={size / 2}
           r={r}
-          stroke="var(--primary)"
+          stroke={ringColor}
           strokeWidth={stroke}
           strokeDasharray={c}
           strokeDashoffset={offset}
@@ -582,7 +583,9 @@ function Gauge({ value }: { value: number }) {
           fill="none"
         />
       </svg>
-      <span className="absolute font-mono text-[10px] font-semibold text-primary">
+      <span
+        className={`absolute text-[10px] font-semibold tabular-nums ${over ? "text-accent-tint-foreground" : "text-success-tint-foreground"}`}
+      >
         {value.toFixed(0)}%
       </span>
     </div>

@@ -61,9 +61,7 @@ export function UnidadeNaoEncontrada() {
   return (
     <div className="grid min-h-screen place-items-center bg-background p-6 text-center">
       <div className="max-w-sm">
-        <p className="font-mono text-xs uppercase tracking-widest text-primary">
-          Unidade não encontrada
-        </p>
+        <p className="text-xs font-medium text-primary">Unidade não encontrada</p>
         <h2 className="mt-2 font-display text-2xl font-bold">Cozinha não faz parte da rede</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           Verifique o link ou volte para o dashboard geral.
@@ -180,7 +178,7 @@ function UnitLayout() {
   if (!unit) {
     return (
       <div className="grid min-h-screen place-items-center bg-background">
-        <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Carregando unidade…
         </p>
       </div>

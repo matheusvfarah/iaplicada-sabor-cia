@@ -48,10 +48,11 @@ const PLATFORM_LABEL: Record<Plataforma, string> = {
   proprio: "Próprio",
 };
 
+// Badges de plataforma seguem o doc: iFood = danger, Rappi = âmbar/marca, Próprio = verde.
 const platformDot: Record<Plataforma, string> = {
-  ifood: "bg-red-500",
-  rappi: "bg-orange-400",
-  proprio: "bg-primary",
+  ifood: "bg-destructive",
+  rappi: "bg-accent",
+  proprio: "bg-success",
 };
 
 export const Route = createFileRoute("/dashboard/unit/$unitId/pedidos")({
@@ -239,8 +240,8 @@ function PedidosKanban() {
               </span>
             </div>
             <span className="relative flex size-2">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-60" />
-              <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-60" />
+              <span className="relative inline-flex size-2 rounded-full bg-success" />
             </span>
             <AlertsBadge />
           </>
@@ -252,6 +253,7 @@ function PedidosKanban() {
           <KanbanColumn
             title="Recebidos"
             icon={PackageOpen}
+            iconClassName="text-accent-tint-foreground"
             count={columns.recebido.length}
             loading={loading}
             emptyTitle="Nenhum pedido novo"
@@ -270,6 +272,7 @@ function PedidosKanban() {
           <KanbanColumn
             title="Em produção"
             icon={ChefHat}
+            iconClassName="text-primary"
             count={columns.preparando.length}
             loading={loading}
             emptyTitle="Nada em produção"
@@ -288,6 +291,7 @@ function PedidosKanban() {
           <KanbanColumn
             title="Finalizados (hoje)"
             icon={PackageCheck}
+            iconClassName="text-success-tint-foreground"
             count={columns.entregue.length}
             loading={loading}
             emptyTitle="Nenhum pedido finalizado ainda"
@@ -325,6 +329,7 @@ function PedidosKanban() {
 function KanbanColumn({
   title,
   icon: Icon,
+  iconClassName,
   count,
   loading,
   emptyTitle,
@@ -333,6 +338,7 @@ function KanbanColumn({
 }: {
   title: string;
   icon: typeof PackageOpen;
+  iconClassName?: string;
   count: number;
   loading: boolean;
   emptyTitle: string;
@@ -344,7 +350,7 @@ function KanbanColumn({
     <div className="flex min-w-0 flex-col rounded-xl border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <Icon className="size-4 text-primary" />
+          <Icon className={cn("size-4", iconClassName ?? "text-primary")} />
           <h2 className="font-display text-sm font-semibold">{title}</h2>
         </div>
         <Badge variant="outline" className="font-mono text-[10px]">

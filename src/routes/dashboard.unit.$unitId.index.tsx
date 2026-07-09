@@ -11,6 +11,8 @@ import { supabase } from "@/lib/supabase";
 import { CURRENCY, CURRENCY_FULL } from "@/lib/currency";
 import { exportCSV, exportPDF } from "@/lib/export";
 import { useUnit } from "@/lib/unit-context";
+import { useSession } from "@/lib/auth";
+import { greetingForHour } from "@/lib/greeting";
 import {
   periodRange,
   periodLabel as computePeriodLabel,
@@ -54,6 +56,8 @@ export const Route = createFileRoute("/dashboard/unit/$unitId/")({
 
 function UnitDashboardIndex() {
   const unit = useUnit();
+  const { session } = useSession();
+  const primeiroNome = session?.profile.nome.split(" ")[0];
   const [period, setPeriod] = useState<PeriodId>("6m");
   const [customRange, setCustomRange] = useState(defaultCustomRange);
   const [loading, setLoading] = useState(true);
@@ -97,8 +101,11 @@ function UnitDashboardIndex() {
 
   const periodLbl = useMemo(() => computePeriodLabel(period, customRange), [period, customRange]);
 
-  const goalPct =
-    kpis?.meta && kpis.meta > 0 ? Math.min(100, ((kpis?.receita ?? 0) / kpis.meta) * 100) : 0;
+  const goalPctRaw =
+    kpis?.meta && kpis.meta > 0 ? ((kpis?.receita ?? 0) / kpis.meta) * 100 : 0;
+  const goalScaleMax = Math.max(100, goalPctRaw);
+  const goalTrackPct = (Math.min(100, goalPctRaw) / goalScaleMax) * 100;
+  const goalOverPct = goalPctRaw > 100 ? ((goalPctRaw - 100) / goalScaleMax) * 100 : 0;
 
   const handleExportCSV = () => {
     exportCSV(
@@ -118,8 +125,8 @@ function UnitDashboardIndex() {
   return (
     <>
       <TopBar
-        title={unit.nome}
-        subtitle="Dashboard da unidade"
+        title={primeiroNome ? `${greetingForHour()}, ${primeiroNome}` : unit.nome}
+        subtitle={unit.nome}
         actions={
           <>
             <Button
@@ -150,7 +157,7 @@ function UnitDashboardIndex() {
       <div className="mx-auto w-full max-w-[1400px] space-y-6 p-4 sm:p-6 lg:p-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               Período
             </p>
             <p className="mt-1 font-display text-lg font-semibold">
@@ -168,7 +175,7 @@ function UnitDashboardIndex() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              <CardTitle className="flex items-center justify-between text-[11px] text-muted-foreground">
                 Receita do período
                 <Target className="size-3.5 text-primary" />
               </CardTitle>
@@ -178,20 +185,30 @@ function UnitDashboardIndex() {
                 <Skeleton className="h-16 w-full" />
               ) : (
                 <>
-                  <p className="font-display text-3xl font-bold">
+                  <p className="font-display text-3xl font-bold tabular-nums">
                     {CURRENCY.format(kpis?.receita ?? 0)}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Meta prorrateada: {CURRENCY.format(kpis?.meta ?? 0)}
                   </p>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface">
+                  <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-secondary">
                     <div
-                      className="h-full rounded-full bg-primary transition-all"
-                      style={{ width: `${goalPct}%` }}
+                      className="h-full rounded-full bg-success transition-all"
+                      style={{ width: `${goalTrackPct}%` }}
                     />
+                    {goalOverPct > 0 && (
+                      <div
+                        className="h-full bg-accent transition-all"
+                        style={{ width: `${goalOverPct}%` }}
+                      />
+                    )}
                   </div>
-                  <p className="mt-1 text-right font-mono text-[10px] text-primary">
-                    {goalPct.toFixed(1)}% da meta
+                  <p
+                    className={`mt-1 text-right text-[11px] tabular-nums ${
+                      goalPctRaw > 100 ? "text-accent-tint-foreground" : "text-success-tint-foreground"
+                    }`}
+                  >
+                    {goalPctRaw.toFixed(1)}% da meta
                   </p>
                 </>
               )}
@@ -200,9 +217,9 @@ function UnitDashboardIndex() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              <CardTitle className="flex items-center justify-between text-[11px] text-muted-foreground">
                 Nota do período
-                <Star className="size-3.5 fill-primary text-primary" />
+                <Star className="size-3.5 fill-accent text-accent" />
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -211,7 +228,7 @@ function UnitDashboardIndex() {
               ) : (
                 <>
                   <div className="flex items-baseline gap-2">
-                    <p className="font-display text-3xl font-bold">
+                    <p className="font-display text-3xl font-bold tabular-nums">
                       {kpis?.nota_media ? kpis.nota_media.toFixed(1) : "—"}
                     </p>
                     <div className="flex">
@@ -220,7 +237,7 @@ function UnitDashboardIndex() {
                           key={i}
                           className={`size-3.5 ${
                             kpis?.nota_media && i < Math.round(kpis.nota_media)
-                              ? "fill-primary text-primary"
+                              ? "fill-accent text-accent"
                               : "text-muted-foreground/30"
                           }`}
                         />
@@ -237,7 +254,7 @@ function UnitDashboardIndex() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              <CardTitle className="flex items-center justify-between text-[11px] text-muted-foreground">
                 Tempo médio de preparo
                 <Clock className="size-3.5 text-primary" />
               </CardTitle>
@@ -247,7 +264,7 @@ function UnitDashboardIndex() {
                 <Skeleton className="h-16 w-full" />
               ) : (
                 <>
-                  <p className="font-display text-3xl font-bold">
+                  <p className="font-display text-3xl font-bold tabular-nums">
                     {tempoMedioPreparo != null ? `${tempoMedioPreparo.toFixed(0)} min` : "—"}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">{periodLbl}</p>
@@ -258,7 +275,7 @@ function UnitDashboardIndex() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              <CardTitle className="flex items-center justify-between text-[11px] text-muted-foreground">
                 Itens mais vendidos
                 <TrendingUp className="size-3.5 text-primary" />
               </CardTitle>

@@ -21,7 +21,7 @@ function DashboardLayout() {
   if (!ready || !session) {
     return (
       <div className="grid min-h-screen place-items-center bg-background">
-        <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Verificando sessão…
         </p>
       </div>

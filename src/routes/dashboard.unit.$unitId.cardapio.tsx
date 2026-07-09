@@ -165,7 +165,7 @@ function CardapioPage() {
                       {!produto.disponivel && (
                         <Badge
                           variant="outline"
-                          className="border-amber-500/20 bg-amber-500/10 text-[10px] text-amber-500"
+                          className="border-transparent bg-accent-tint text-[10px] text-accent-tint-foreground"
                         >
                           Pausado
                         </Badge>

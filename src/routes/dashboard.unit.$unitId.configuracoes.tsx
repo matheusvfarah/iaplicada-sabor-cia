@@ -83,7 +83,7 @@ function ConfiguracoesPage() {
             ) : (
               <>
                 <div>
-                  <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground">
                     Nome
                   </p>
                   <p className="mt-0.5 text-sm font-semibold">{detalhe.nome}</p>
@@ -94,7 +94,7 @@ function ConfiguracoesPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <CircleDot
-                    className={`size-3.5 ${detalhe.status === "ativa" ? "text-emerald-500" : "text-muted-foreground"}`}
+                    className={`size-3.5 ${detalhe.status === "ativa" ? "text-success" : "text-muted-foreground"}`}
                   />
                   <p className="text-sm text-muted-foreground">
                     {detalhe.status === "ativa" ? "Unidade ativa" : "Unidade inativa"}
