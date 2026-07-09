@@ -24,13 +24,18 @@
 ## Estrutura
 
 ```
-supabase/
-  migrations/      # schema, RLS, triggers, RPCs, view
-  seed.sql         # dados de demonstração (~13k pedidos, 6 meses, 5 unidades)
-  validate-sql.mjs # teste automatizado: roda migrations + seed num Postgres
-                   # local (PGlite) e valida RLS, trigger e RPCs
-automations/    # workflows n8n exportados (JSON) + documentação
-docs/           # spec de design e plano de execução
+src/, public/       # Frontend — gerado/sincronizado via Lovable (GitHub sync)
+                     # componentes, rotas, telas (login, dashboards)
+
+supabase/           # Backend — banco de dados como código
+  migrations/        # schema, RLS, triggers, RPCs, view
+  seed.sql           # dados de demonstração (~13k pedidos, 6 meses, 5 unidades)
+  validate-sql.mjs   # teste automatizado: roda migrations + seed num Postgres
+                     # local (PGlite) e valida RLS, trigger e RPCs
+
+automations/        # Automação — workflows n8n exportados (JSON) + documentação
+
+docs/               # Spec de design e plano de execução
 ```
 
 ## Decisões técnicas e trade-offs
