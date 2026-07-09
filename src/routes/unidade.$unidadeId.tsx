@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Clock } from "lucide-react";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { UnitNav } from "@/components/unit-nav";
 import { UnitContext } from "@/lib/unit-context";
+import { useSession } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { CURRENCY_FULL } from "@/lib/currency";
 import {
@@ -79,14 +80,52 @@ export function UnidadeNaoEncontrada() {
   );
 }
 
+function SemUnidadeVinculada() {
+  return (
+    <div className="grid min-h-screen place-items-center bg-background p-6 text-center">
+      <div className="max-w-sm">
+        <p className="text-xs font-medium text-destructive">Conta sem unidade</p>
+        <h2 className="mt-2 font-display text-2xl font-bold">
+          Sua conta não está vinculada a nenhuma unidade
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Contate o administrador da rede para vincular seu usuário a uma unidade.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function UnitLayout() {
   const { unidadeId } = Route.useLoaderData();
+  const { session, ready } = useSession();
+  const navigate = useNavigate();
   const [unit, setUnit] = useState<{ id: number; nome: string } | null>(null);
   const [horario, setHorario] = useState<HorarioFuncionamento | null>(null);
   const [unitNotFound, setUnitNotFound] = useState(false);
   const [pendingQueue, setPendingQueue] = useState<Pedido[]>([]);
   const [pendingItens, setPendingItens] = useState<PedidoItemDetalhe[]>([]);
   const [resolvingPending, setResolvingPending] = useState(false);
+
+  // Gerente só acessa a própria unidade — deep link pra outra unidade
+  // redireciona de volta com aviso, em vez de deixar o botão/URL "morto"
+  // ou vazar dados de outra unidade (a RLS já bloqueia os dados a nível
+  // de linha; isso aqui é só a camada de UX/rota).
+  const isGerenteForaDaUnidade =
+    !!session &&
+    session.profile.role === "gerente" &&
+    session.profile.unidade_id != null &&
+    session.profile.unidade_id !== unidadeId;
+
+  useEffect(() => {
+    if (!isGerenteForaDaUnidade || !session?.profile.unidade_id) return;
+    toast.error("Você não tem acesso a essa unidade");
+    navigate({
+      to: "/unidade/$unidadeId",
+      params: { unidadeId: String(session.profile.unidade_id) },
+      replace: true,
+    });
+  }, [isGerenteForaDaUnidade, session, navigate]);
 
   // Busca a unidade no client (não no loader — ver comentário na rota).
   useEffect(() => {
@@ -208,6 +247,24 @@ function UnitLayout() {
     if (!error) {
       setPendingQueue((prev) => prev.filter((p) => p.id !== currentPending.id));
     }
+  }
+
+  if (ready && session?.profile.role === "gerente" && session.profile.unidade_id == null) {
+    return (
+      <AppShell>
+        <SemUnidadeVinculada />
+      </AppShell>
+    );
+  }
+
+  if (isGerenteForaDaUnidade) {
+    return (
+      <AppShell>
+        <div className="grid min-h-screen place-items-center bg-background">
+          <p className="text-xs text-muted-foreground">Redirecionando…</p>
+        </div>
+      </AppShell>
+    );
   }
 
   if (unitNotFound) {

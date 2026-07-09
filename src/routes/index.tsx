@@ -23,16 +23,28 @@ function Index() {
         params: { unidadeId: String(session.profile.unidade_id) },
         replace: true,
       });
-    } else {
-      navigate({ to: "/rede", replace: true });
     }
+    // gerente sem unidade_id: fica na tela abaixo — não há rota sensata
+    // pra mandar (ver SemUnidadeVinculada em unidade.$unidadeId.tsx).
   }, [ready, session, navigate]);
 
+  const semUnidade =
+    ready && session && session.profile.role === "gerente" && session.profile.unidade_id == null;
+
   return (
-    <div className="grid min-h-screen place-items-center bg-background">
+    <div className="grid min-h-screen place-items-center bg-background p-6 text-center">
       <div className="flex flex-col items-center gap-4 text-muted-foreground">
         <BrandLogo size="lg" showText={false} />
-        <p className="text-xs">Carregando operação…</p>
+        {semUnidade ? (
+          <div className="max-w-sm">
+            <p className="text-sm font-semibold text-foreground">
+              Sua conta não está vinculada a nenhuma unidade
+            </p>
+            <p className="mt-1 text-xs">Contate o administrador da rede.</p>
+          </div>
+        ) : (
+          <p className="text-xs">Carregando operação…</p>
+        )}
       </div>
     </div>
   );
