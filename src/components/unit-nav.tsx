@@ -6,25 +6,25 @@ import { cn } from "@/lib/utils";
 
 const ITEMS = [
   {
-    to: "/dashboard/unit/$unitId" as const,
+    to: "/unidade/$unidadeId" as const,
     label: "Dashboard",
     icon: LayoutDashboard,
     exact: true,
   },
   {
-    to: "/dashboard/unit/$unitId/pedidos" as const,
+    to: "/unidade/$unidadeId/pedidos" as const,
     label: "Pedidos",
     icon: ClipboardList,
     exact: false,
   },
   {
-    to: "/dashboard/unit/$unitId/cardapio" as const,
+    to: "/unidade/$unidadeId/cardapio" as const,
     label: "Cardápio",
     icon: UtensilsCrossed,
     exact: false,
   },
   {
-    to: "/dashboard/unit/$unitId/configuracoes" as const,
+    to: "/unidade/$unidadeId/configuracoes" as const,
     label: "Configurações",
     icon: Settings,
     exact: false,
@@ -34,12 +34,12 @@ const ITEMS = [
 // Navegação da unidade só existe no mobile agora — no desktop, a
 // navegação vive inteira no painel esquerdo (AppSidebar), sem duplicar
 // numa barra horizontal também.
-export function UnitNav({ unitId }: { unitId: number }) {
+export function UnitNav({ unidadeId }: { unidadeId: number }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const recebidos = useRecebidosCount(unitId);
+  const recebidos = useRecebidosCount(unidadeId);
 
   const isActive = (to: string, exact?: boolean) => {
-    const resolved = to.replace("$unitId", String(unitId));
+    const resolved = to.replace("$unidadeId", String(unidadeId));
     return exact ? pathname === resolved : pathname.startsWith(resolved);
   };
 
@@ -52,7 +52,7 @@ export function UnitNav({ unitId }: { unitId: number }) {
           <Link
             key={item.to}
             to={item.to}
-            params={{ unitId: String(unitId) }}
+            params={{ unidadeId: String(unidadeId) }}
             className={cn(
               "relative flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] font-medium",
               active ? "text-primary" : "text-muted-foreground",

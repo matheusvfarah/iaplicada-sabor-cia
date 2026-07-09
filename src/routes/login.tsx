@@ -38,13 +38,15 @@ function LoginPage() {
     try {
       const session = await signIn(email, password);
       if (session.profile.role === "gestor_geral") {
-        navigate({ to: "/dashboard", replace: true });
-      } else {
+        navigate({ to: "/rede", replace: true });
+      } else if (session.profile.unidade_id != null) {
         navigate({
-          to: "/dashboard/unit/$unitId",
-          params: { unitId: String(session.profile.unidade_id) },
+          to: "/unidade/$unidadeId",
+          params: { unidadeId: String(session.profile.unidade_id) },
           replace: true,
         });
+      } else {
+        navigate({ to: "/", replace: true });
       }
     } catch {
       setError("E-mail ou senha inválidos.");

@@ -2,6 +2,7 @@ import { createFileRoute, Link, notFound, Outlet } from "@tanstack/react-router"
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Clock } from "lucide-react";
 import { toast } from "sonner";
+import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,9 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UnitNav } from "@/components/unit-nav";
-import { UnitSwitcher } from "@/components/unit-switcher";
 import { UnitContext } from "@/lib/unit-context";
-import { useSession } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { CURRENCY_FULL } from "@/lib/currency";
 import {
@@ -49,13 +48,13 @@ const PLATFORM_LABEL: Record<Plataforma, string> = {
   proprio: "Próprio",
 };
 
-export const Route = createFileRoute("/dashboard/unit/$unitId")({
+export const Route = createFileRoute("/unidade/$unidadeId")({
   // Não consulta o Supabase aqui: esse loader roda no servidor (SSR) em
   // reloads/navegação direta, e o client ali não tem a sessão de auth
   // (ela só existe no localStorage do navegador) — RLS bloquearia
   // qualquer usuário, mesmo logado. A busca real acontece no client.
   loader: ({ params }) => {
-    const unidadeId = Number(params.unitId);
+    const unidadeId = Number(params.unidadeId);
     if (!Number.isFinite(unidadeId)) throw notFound();
     return { unidadeId };
   },
@@ -73,7 +72,7 @@ export function UnidadeNaoEncontrada() {
           Verifique o link ou volte para o dashboard geral.
         </p>
         <Button asChild className="mt-6">
-          <Link to="/dashboard">Voltar ao Dashboard</Link>
+          <Link to="/rede">Voltar ao Dashboard</Link>
         </Button>
       </div>
     </div>
@@ -82,7 +81,6 @@ export function UnidadeNaoEncontrada() {
 
 function UnitLayout() {
   const { unidadeId } = Route.useLoaderData();
-  const { session } = useSession();
   const [unit, setUnit] = useState<{ id: number; nome: string } | null>(null);
   const [horario, setHorario] = useState<HorarioFuncionamento | null>(null);
   const [unitNotFound, setUnitNotFound] = useState(false);
@@ -212,102 +210,111 @@ function UnitLayout() {
     }
   }
 
-  if (unitNotFound) return <UnidadeNaoEncontrada />;
+  if (unitNotFound) {
+    return (
+      <AppShell>
+        <UnidadeNaoEncontrada />
+      </AppShell>
+    );
+  }
 
   if (!unit) {
     return (
-      <div className="grid min-h-screen place-items-center bg-background">
-        <p className="text-xs text-muted-foreground">Carregando unidade…</p>
-      </div>
+      <AppShell>
+        <div className="grid min-h-screen place-items-center bg-background">
+          <p className="text-xs text-muted-foreground">Carregando unidade…</p>
+        </div>
+      </AppShell>
     );
   }
 
   return (
-    <UnitContext.Provider value={unit}>
-      <Dialog open={!!currentPending}>
-        <DialogContent
-          showCloseButton={false}
-          className="sm:max-w-md"
-          onEscapeKeyDown={(e) => e.preventDefault()}
-          onPointerDownOutside={(e) => e.preventDefault()}
-        >
-          <DialogHeader>
-            <DialogTitle>Novo pedido recebido</DialogTitle>
-            <DialogDescription>
-              {currentPending && (
-                <>
-                  Pedido #{currentPending.id} · {PLATFORM_LABEL[currentPending.plataforma]} ·{" "}
-                  {CURRENCY_FULL.format(currentPending.valor)}
-                  {pendingQueue.length > 1 && ` · +${pendingQueue.length - 1} na fila`}
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
+    <AppShell>
+      <UnitContext.Provider value={unit}>
+        <Dialog open={!!currentPending}>
+          <DialogContent
+            showCloseButton={false}
+            className="sm:max-w-md"
+            onEscapeKeyDown={(e) => e.preventDefault()}
+            onPointerDownOutside={(e) => e.preventDefault()}
+          >
+            <DialogHeader>
+              <DialogTitle>Novo pedido recebido</DialogTitle>
+              <DialogDescription>
+                {currentPending && (
+                  <>
+                    Pedido #{currentPending.id} · {PLATFORM_LABEL[currentPending.plataforma]} ·{" "}
+                    {CURRENCY_FULL.format(currentPending.valor)}
+                    {pendingQueue.length > 1 && ` · +${pendingQueue.length - 1} na fila`}
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="max-h-64 space-y-2 overflow-auto">
-            {pendingItens.length === 0 ? (
-              <Skeleton className="h-16 w-full" />
-            ) : (
-              pendingItens.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between rounded-lg border border-border bg-surface p-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">
-                      {item.quantidade}× {item.produto?.nome ?? "Item"}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {CURRENCY_FULL.format(item.preco_unitario)} cada
-                    </p>
+            <div className="max-h-64 space-y-2 overflow-auto">
+              {pendingItens.length === 0 ? (
+                <Skeleton className="h-16 w-full" />
+              ) : (
+                pendingItens.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between rounded-lg border border-border bg-surface p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">
+                        {item.quantidade}× {item.produto?.nome ?? "Item"}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {CURRENCY_FULL.format(item.preco_unitario)} cada
+                      </p>
+                    </div>
+                    {item.produto && !item.produto.disponivel && (
+                      <Badge
+                        variant="outline"
+                        className="ml-2 shrink-0 gap-1 border-destructive/20 bg-destructive/10 text-[10px] text-destructive"
+                      >
+                        <AlertTriangle className="size-3" />
+                        Indisponível agora
+                      </Badge>
+                    )}
                   </div>
-                  {item.produto && !item.produto.disponivel && (
-                    <Badge
-                      variant="outline"
-                      className="ml-2 shrink-0 gap-1 border-destructive/20 bg-destructive/10 text-[10px] text-destructive"
-                    >
-                      <AlertTriangle className="size-3" />
-                      Indisponível agora
-                    </Badge>
-                  )}
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                disabled={resolvingPending}
+                onClick={() => handleResolverPendente("cancelado")}
+              >
+                Recusar
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={resolvingPending}
+                onClick={() => handleResolverPendente("recebido")}
+              >
+                Aceitar pedido
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {showBanner && proximaVirada && (
+          <div className="flex items-center justify-center gap-1.5 border-b border-border bg-accent-tint px-4 py-1.5 text-center text-xs font-medium text-accent-tint-foreground">
+            <Clock className="size-3.5 shrink-0" />
+            {proximaVirada.tipo === "fecha"
+              ? `Fecha em ${proximaVirada.minutos} min`
+              : `Abre em ${proximaVirada.minutos} min`}
           </div>
-
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button
-              variant="outline"
-              className="flex-1"
-              disabled={resolvingPending}
-              onClick={() => handleResolverPendente("cancelado")}
-            >
-              Recusar
-            </Button>
-            <Button
-              className="flex-1"
-              disabled={resolvingPending}
-              onClick={() => handleResolverPendente("recebido")}
-            >
-              Aceitar pedido
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {session?.profile.role === "gestor_geral" && <UnitSwitcher currentUnit={unit} />}
-      {showBanner && proximaVirada && (
-        <div className="flex items-center justify-center gap-1.5 border-b border-border bg-accent-tint px-4 py-1.5 text-center text-xs font-medium text-accent-tint-foreground">
-          <Clock className="size-3.5 shrink-0" />
-          {proximaVirada.tipo === "fecha"
-            ? `Fecha em ${proximaVirada.minutos} min`
-            : `Abre em ${proximaVirada.minutos} min`}
+        )}
+        <UnitNav unidadeId={unit.id} />
+        <div className="pb-16 sm:pb-0">
+          <Outlet />
         </div>
-      )}
-      <UnitNav unitId={unit.id} />
-      <div className="pb-16 sm:pb-0">
-        <Outlet />
-      </div>
-    </UnitContext.Provider>
+      </UnitContext.Provider>
+    </AppShell>
   );
 }

@@ -83,7 +83,7 @@ const PLATFORM_COLOR: Record<Plataforma, string> = {
   proprio: "var(--success)",
 };
 
-export const Route = createFileRoute("/dashboard/unit/$unitId/")({
+export const Route = createFileRoute("/unidade/$unidadeId/")({
   head: () => ({
     meta: [{ title: "Dashboard da Unidade — Sabor & Cia" }],
   }),

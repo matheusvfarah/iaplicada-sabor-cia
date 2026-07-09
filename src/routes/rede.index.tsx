@@ -40,7 +40,7 @@ import {
 } from "@/lib/period";
 import { KpiDelta, MicroDelta } from "@/components/kpi-delta";
 
-export const Route = createFileRoute("/dashboard/")({
+export const Route = createFileRoute("/rede/")({
   head: () => ({
     meta: [
       { title: "Dashboard Geral — Sabor & Cia" },
@@ -454,8 +454,8 @@ function GeneralDashboard() {
                       {kpisUnidades.map((u) => (
                         <Link
                           key={u.unidade_id}
-                          to="/dashboard/unit/$unitId"
-                          params={{ unitId: String(u.unidade_id) }}
+                          to="/unidade/$unidadeId"
+                          params={{ unidadeId: String(u.unidade_id) }}
                           className="rounded-lg border border-border bg-surface p-4 transition-colors hover:border-primary/40 hover:bg-surface-hover"
                         >
                           <div className="flex items-center justify-between">

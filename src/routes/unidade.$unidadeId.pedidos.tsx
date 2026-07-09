@@ -72,7 +72,7 @@ const PLATFORM_BADGE: Record<Plataforma, string> = {
   proprio: "bg-success-tint text-success-tint-foreground",
 };
 
-export const Route = createFileRoute("/dashboard/unit/$unitId/pedidos")({
+export const Route = createFileRoute("/unidade/$unidadeId/pedidos")({
   head: () => ({
     meta: [{ title: "Pedidos — Sabor & Cia" }],
   }),

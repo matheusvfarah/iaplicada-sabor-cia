@@ -9,25 +9,26 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RedeRouteImport } from './routes/rede'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
-import { Route as DashboardAlertasRouteImport } from './routes/dashboard.alertas'
-import { Route as DashboardUnitUnitIdRouteImport } from './routes/dashboard.unit.$unitId'
-import { Route as DashboardUnitUnitIdIndexRouteImport } from './routes/dashboard.unit.$unitId.index'
-import { Route as DashboardUnitUnitIdPedidosRouteImport } from './routes/dashboard.unit.$unitId.pedidos'
-import { Route as DashboardUnitUnitIdConfiguracoesRouteImport } from './routes/dashboard.unit.$unitId.configuracoes'
-import { Route as DashboardUnitUnitIdCardapioRouteImport } from './routes/dashboard.unit.$unitId.cardapio'
+import { Route as RedeIndexRouteImport } from './routes/rede.index'
+import { Route as UnidadeUnidadeIdRouteImport } from './routes/unidade.$unidadeId'
+import { Route as RedeConfiguracoesRouteImport } from './routes/rede.configuracoes'
+import { Route as RedeAlertasRouteImport } from './routes/rede.alertas'
+import { Route as UnidadeUnidadeIdIndexRouteImport } from './routes/unidade.$unidadeId.index'
+import { Route as UnidadeUnidadeIdPedidosRouteImport } from './routes/unidade.$unidadeId.pedidos'
+import { Route as UnidadeUnidadeIdConfiguracoesRouteImport } from './routes/unidade.$unidadeId.configuracoes'
+import { Route as UnidadeUnidadeIdCardapioRouteImport } from './routes/unidade.$unidadeId.cardapio'
 
+const RedeRoute = RedeRouteImport.update({
+  id: '/rede',
+  path: '/rede',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -35,138 +36,148 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DashboardIndexRoute = DashboardIndexRouteImport.update({
+const RedeIndexRoute = RedeIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => DashboardRoute,
+  getParentRoute: () => RedeRoute,
 } as any)
-const DashboardAlertasRoute = DashboardAlertasRouteImport.update({
+const UnidadeUnidadeIdRoute = UnidadeUnidadeIdRouteImport.update({
+  id: '/unidade/$unidadeId',
+  path: '/unidade/$unidadeId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RedeConfiguracoesRoute = RedeConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => RedeRoute,
+} as any)
+const RedeAlertasRoute = RedeAlertasRouteImport.update({
   id: '/alertas',
   path: '/alertas',
-  getParentRoute: () => DashboardRoute,
+  getParentRoute: () => RedeRoute,
 } as any)
-const DashboardUnitUnitIdRoute = DashboardUnitUnitIdRouteImport.update({
-  id: '/unit/$unitId',
-  path: '/unit/$unitId',
-  getParentRoute: () => DashboardRoute,
+const UnidadeUnidadeIdIndexRoute = UnidadeUnidadeIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => UnidadeUnidadeIdRoute,
 } as any)
-const DashboardUnitUnitIdIndexRoute =
-  DashboardUnitUnitIdIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => DashboardUnitUnitIdRoute,
-  } as any)
-const DashboardUnitUnitIdPedidosRoute =
-  DashboardUnitUnitIdPedidosRouteImport.update({
-    id: '/pedidos',
-    path: '/pedidos',
-    getParentRoute: () => DashboardUnitUnitIdRoute,
-  } as any)
-const DashboardUnitUnitIdConfiguracoesRoute =
-  DashboardUnitUnitIdConfiguracoesRouteImport.update({
+const UnidadeUnidadeIdPedidosRoute = UnidadeUnidadeIdPedidosRouteImport.update({
+  id: '/pedidos',
+  path: '/pedidos',
+  getParentRoute: () => UnidadeUnidadeIdRoute,
+} as any)
+const UnidadeUnidadeIdConfiguracoesRoute =
+  UnidadeUnidadeIdConfiguracoesRouteImport.update({
     id: '/configuracoes',
     path: '/configuracoes',
-    getParentRoute: () => DashboardUnitUnitIdRoute,
+    getParentRoute: () => UnidadeUnidadeIdRoute,
   } as any)
-const DashboardUnitUnitIdCardapioRoute =
-  DashboardUnitUnitIdCardapioRouteImport.update({
+const UnidadeUnidadeIdCardapioRoute =
+  UnidadeUnidadeIdCardapioRouteImport.update({
     id: '/cardapio',
     path: '/cardapio',
-    getParentRoute: () => DashboardUnitUnitIdRoute,
+    getParentRoute: () => UnidadeUnidadeIdRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRouteWithChildren
   '/login': typeof LoginRoute
-  '/dashboard/alertas': typeof DashboardAlertasRoute
-  '/dashboard/': typeof DashboardIndexRoute
-  '/dashboard/unit/$unitId': typeof DashboardUnitUnitIdRouteWithChildren
-  '/dashboard/unit/$unitId/cardapio': typeof DashboardUnitUnitIdCardapioRoute
-  '/dashboard/unit/$unitId/configuracoes': typeof DashboardUnitUnitIdConfiguracoesRoute
-  '/dashboard/unit/$unitId/pedidos': typeof DashboardUnitUnitIdPedidosRoute
-  '/dashboard/unit/$unitId/': typeof DashboardUnitUnitIdIndexRoute
+  '/rede': typeof RedeRouteWithChildren
+  '/rede/alertas': typeof RedeAlertasRoute
+  '/rede/configuracoes': typeof RedeConfiguracoesRoute
+  '/unidade/$unidadeId': typeof UnidadeUnidadeIdRouteWithChildren
+  '/rede/': typeof RedeIndexRoute
+  '/unidade/$unidadeId/cardapio': typeof UnidadeUnidadeIdCardapioRoute
+  '/unidade/$unidadeId/configuracoes': typeof UnidadeUnidadeIdConfiguracoesRoute
+  '/unidade/$unidadeId/pedidos': typeof UnidadeUnidadeIdPedidosRoute
+  '/unidade/$unidadeId/': typeof UnidadeUnidadeIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/dashboard/alertas': typeof DashboardAlertasRoute
-  '/dashboard': typeof DashboardIndexRoute
-  '/dashboard/unit/$unitId/cardapio': typeof DashboardUnitUnitIdCardapioRoute
-  '/dashboard/unit/$unitId/configuracoes': typeof DashboardUnitUnitIdConfiguracoesRoute
-  '/dashboard/unit/$unitId/pedidos': typeof DashboardUnitUnitIdPedidosRoute
-  '/dashboard/unit/$unitId': typeof DashboardUnitUnitIdIndexRoute
+  '/rede/alertas': typeof RedeAlertasRoute
+  '/rede/configuracoes': typeof RedeConfiguracoesRoute
+  '/rede': typeof RedeIndexRoute
+  '/unidade/$unidadeId/cardapio': typeof UnidadeUnidadeIdCardapioRoute
+  '/unidade/$unidadeId/configuracoes': typeof UnidadeUnidadeIdConfiguracoesRoute
+  '/unidade/$unidadeId/pedidos': typeof UnidadeUnidadeIdPedidosRoute
+  '/unidade/$unidadeId': typeof UnidadeUnidadeIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRouteWithChildren
   '/login': typeof LoginRoute
-  '/dashboard/alertas': typeof DashboardAlertasRoute
-  '/dashboard/': typeof DashboardIndexRoute
-  '/dashboard/unit/$unitId': typeof DashboardUnitUnitIdRouteWithChildren
-  '/dashboard/unit/$unitId/cardapio': typeof DashboardUnitUnitIdCardapioRoute
-  '/dashboard/unit/$unitId/configuracoes': typeof DashboardUnitUnitIdConfiguracoesRoute
-  '/dashboard/unit/$unitId/pedidos': typeof DashboardUnitUnitIdPedidosRoute
-  '/dashboard/unit/$unitId/': typeof DashboardUnitUnitIdIndexRoute
+  '/rede': typeof RedeRouteWithChildren
+  '/rede/alertas': typeof RedeAlertasRoute
+  '/rede/configuracoes': typeof RedeConfiguracoesRoute
+  '/unidade/$unidadeId': typeof UnidadeUnidadeIdRouteWithChildren
+  '/rede/': typeof RedeIndexRoute
+  '/unidade/$unidadeId/cardapio': typeof UnidadeUnidadeIdCardapioRoute
+  '/unidade/$unidadeId/configuracoes': typeof UnidadeUnidadeIdConfiguracoesRoute
+  '/unidade/$unidadeId/pedidos': typeof UnidadeUnidadeIdPedidosRoute
+  '/unidade/$unidadeId/': typeof UnidadeUnidadeIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/dashboard'
     | '/login'
-    | '/dashboard/alertas'
-    | '/dashboard/'
-    | '/dashboard/unit/$unitId'
-    | '/dashboard/unit/$unitId/cardapio'
-    | '/dashboard/unit/$unitId/configuracoes'
-    | '/dashboard/unit/$unitId/pedidos'
-    | '/dashboard/unit/$unitId/'
+    | '/rede'
+    | '/rede/alertas'
+    | '/rede/configuracoes'
+    | '/unidade/$unidadeId'
+    | '/rede/'
+    | '/unidade/$unidadeId/cardapio'
+    | '/unidade/$unidadeId/configuracoes'
+    | '/unidade/$unidadeId/pedidos'
+    | '/unidade/$unidadeId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
-    | '/dashboard/alertas'
-    | '/dashboard'
-    | '/dashboard/unit/$unitId/cardapio'
-    | '/dashboard/unit/$unitId/configuracoes'
-    | '/dashboard/unit/$unitId/pedidos'
-    | '/dashboard/unit/$unitId'
+    | '/rede/alertas'
+    | '/rede/configuracoes'
+    | '/rede'
+    | '/unidade/$unidadeId/cardapio'
+    | '/unidade/$unidadeId/configuracoes'
+    | '/unidade/$unidadeId/pedidos'
+    | '/unidade/$unidadeId'
   id:
     | '__root__'
     | '/'
-    | '/dashboard'
     | '/login'
-    | '/dashboard/alertas'
-    | '/dashboard/'
-    | '/dashboard/unit/$unitId'
-    | '/dashboard/unit/$unitId/cardapio'
-    | '/dashboard/unit/$unitId/configuracoes'
-    | '/dashboard/unit/$unitId/pedidos'
-    | '/dashboard/unit/$unitId/'
+    | '/rede'
+    | '/rede/alertas'
+    | '/rede/configuracoes'
+    | '/unidade/$unidadeId'
+    | '/rede/'
+    | '/unidade/$unidadeId/cardapio'
+    | '/unidade/$unidadeId/configuracoes'
+    | '/unidade/$unidadeId/pedidos'
+    | '/unidade/$unidadeId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  DashboardRoute: typeof DashboardRouteWithChildren
   LoginRoute: typeof LoginRoute
+  RedeRoute: typeof RedeRouteWithChildren
+  UnidadeUnidadeIdRoute: typeof UnidadeUnidadeIdRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/rede': {
+      id: '/rede'
+      path: '/rede'
+      fullPath: '/rede'
+      preLoaderRoute: typeof RedeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -176,95 +187,101 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dashboard/': {
-      id: '/dashboard/'
+    '/rede/': {
+      id: '/rede/'
       path: '/'
-      fullPath: '/dashboard/'
-      preLoaderRoute: typeof DashboardIndexRouteImport
-      parentRoute: typeof DashboardRoute
+      fullPath: '/rede/'
+      preLoaderRoute: typeof RedeIndexRouteImport
+      parentRoute: typeof RedeRoute
     }
-    '/dashboard/alertas': {
-      id: '/dashboard/alertas'
-      path: '/alertas'
-      fullPath: '/dashboard/alertas'
-      preLoaderRoute: typeof DashboardAlertasRouteImport
-      parentRoute: typeof DashboardRoute
+    '/unidade/$unidadeId': {
+      id: '/unidade/$unidadeId'
+      path: '/unidade/$unidadeId'
+      fullPath: '/unidade/$unidadeId'
+      preLoaderRoute: typeof UnidadeUnidadeIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/dashboard/unit/$unitId': {
-      id: '/dashboard/unit/$unitId'
-      path: '/unit/$unitId'
-      fullPath: '/dashboard/unit/$unitId'
-      preLoaderRoute: typeof DashboardUnitUnitIdRouteImport
-      parentRoute: typeof DashboardRoute
-    }
-    '/dashboard/unit/$unitId/': {
-      id: '/dashboard/unit/$unitId/'
-      path: '/'
-      fullPath: '/dashboard/unit/$unitId/'
-      preLoaderRoute: typeof DashboardUnitUnitIdIndexRouteImport
-      parentRoute: typeof DashboardUnitUnitIdRoute
-    }
-    '/dashboard/unit/$unitId/pedidos': {
-      id: '/dashboard/unit/$unitId/pedidos'
-      path: '/pedidos'
-      fullPath: '/dashboard/unit/$unitId/pedidos'
-      preLoaderRoute: typeof DashboardUnitUnitIdPedidosRouteImport
-      parentRoute: typeof DashboardUnitUnitIdRoute
-    }
-    '/dashboard/unit/$unitId/configuracoes': {
-      id: '/dashboard/unit/$unitId/configuracoes'
+    '/rede/configuracoes': {
+      id: '/rede/configuracoes'
       path: '/configuracoes'
-      fullPath: '/dashboard/unit/$unitId/configuracoes'
-      preLoaderRoute: typeof DashboardUnitUnitIdConfiguracoesRouteImport
-      parentRoute: typeof DashboardUnitUnitIdRoute
+      fullPath: '/rede/configuracoes'
+      preLoaderRoute: typeof RedeConfiguracoesRouteImport
+      parentRoute: typeof RedeRoute
     }
-    '/dashboard/unit/$unitId/cardapio': {
-      id: '/dashboard/unit/$unitId/cardapio'
+    '/rede/alertas': {
+      id: '/rede/alertas'
+      path: '/alertas'
+      fullPath: '/rede/alertas'
+      preLoaderRoute: typeof RedeAlertasRouteImport
+      parentRoute: typeof RedeRoute
+    }
+    '/unidade/$unidadeId/': {
+      id: '/unidade/$unidadeId/'
+      path: '/'
+      fullPath: '/unidade/$unidadeId/'
+      preLoaderRoute: typeof UnidadeUnidadeIdIndexRouteImport
+      parentRoute: typeof UnidadeUnidadeIdRoute
+    }
+    '/unidade/$unidadeId/pedidos': {
+      id: '/unidade/$unidadeId/pedidos'
+      path: '/pedidos'
+      fullPath: '/unidade/$unidadeId/pedidos'
+      preLoaderRoute: typeof UnidadeUnidadeIdPedidosRouteImport
+      parentRoute: typeof UnidadeUnidadeIdRoute
+    }
+    '/unidade/$unidadeId/configuracoes': {
+      id: '/unidade/$unidadeId/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/unidade/$unidadeId/configuracoes'
+      preLoaderRoute: typeof UnidadeUnidadeIdConfiguracoesRouteImport
+      parentRoute: typeof UnidadeUnidadeIdRoute
+    }
+    '/unidade/$unidadeId/cardapio': {
+      id: '/unidade/$unidadeId/cardapio'
       path: '/cardapio'
-      fullPath: '/dashboard/unit/$unitId/cardapio'
-      preLoaderRoute: typeof DashboardUnitUnitIdCardapioRouteImport
-      parentRoute: typeof DashboardUnitUnitIdRoute
+      fullPath: '/unidade/$unidadeId/cardapio'
+      preLoaderRoute: typeof UnidadeUnidadeIdCardapioRouteImport
+      parentRoute: typeof UnidadeUnidadeIdRoute
     }
   }
 }
 
-interface DashboardUnitUnitIdRouteChildren {
-  DashboardUnitUnitIdCardapioRoute: typeof DashboardUnitUnitIdCardapioRoute
-  DashboardUnitUnitIdConfiguracoesRoute: typeof DashboardUnitUnitIdConfiguracoesRoute
-  DashboardUnitUnitIdPedidosRoute: typeof DashboardUnitUnitIdPedidosRoute
-  DashboardUnitUnitIdIndexRoute: typeof DashboardUnitUnitIdIndexRoute
+interface RedeRouteChildren {
+  RedeAlertasRoute: typeof RedeAlertasRoute
+  RedeConfiguracoesRoute: typeof RedeConfiguracoesRoute
+  RedeIndexRoute: typeof RedeIndexRoute
 }
 
-const DashboardUnitUnitIdRouteChildren: DashboardUnitUnitIdRouteChildren = {
-  DashboardUnitUnitIdCardapioRoute: DashboardUnitUnitIdCardapioRoute,
-  DashboardUnitUnitIdConfiguracoesRoute: DashboardUnitUnitIdConfiguracoesRoute,
-  DashboardUnitUnitIdPedidosRoute: DashboardUnitUnitIdPedidosRoute,
-  DashboardUnitUnitIdIndexRoute: DashboardUnitUnitIdIndexRoute,
+const RedeRouteChildren: RedeRouteChildren = {
+  RedeAlertasRoute: RedeAlertasRoute,
+  RedeConfiguracoesRoute: RedeConfiguracoesRoute,
+  RedeIndexRoute: RedeIndexRoute,
 }
 
-const DashboardUnitUnitIdRouteWithChildren =
-  DashboardUnitUnitIdRoute._addFileChildren(DashboardUnitUnitIdRouteChildren)
+const RedeRouteWithChildren = RedeRoute._addFileChildren(RedeRouteChildren)
 
-interface DashboardRouteChildren {
-  DashboardAlertasRoute: typeof DashboardAlertasRoute
-  DashboardIndexRoute: typeof DashboardIndexRoute
-  DashboardUnitUnitIdRoute: typeof DashboardUnitUnitIdRouteWithChildren
+interface UnidadeUnidadeIdRouteChildren {
+  UnidadeUnidadeIdCardapioRoute: typeof UnidadeUnidadeIdCardapioRoute
+  UnidadeUnidadeIdConfiguracoesRoute: typeof UnidadeUnidadeIdConfiguracoesRoute
+  UnidadeUnidadeIdPedidosRoute: typeof UnidadeUnidadeIdPedidosRoute
+  UnidadeUnidadeIdIndexRoute: typeof UnidadeUnidadeIdIndexRoute
 }
 
-const DashboardRouteChildren: DashboardRouteChildren = {
-  DashboardAlertasRoute: DashboardAlertasRoute,
-  DashboardIndexRoute: DashboardIndexRoute,
-  DashboardUnitUnitIdRoute: DashboardUnitUnitIdRouteWithChildren,
+const UnidadeUnidadeIdRouteChildren: UnidadeUnidadeIdRouteChildren = {
+  UnidadeUnidadeIdCardapioRoute: UnidadeUnidadeIdCardapioRoute,
+  UnidadeUnidadeIdConfiguracoesRoute: UnidadeUnidadeIdConfiguracoesRoute,
+  UnidadeUnidadeIdPedidosRoute: UnidadeUnidadeIdPedidosRoute,
+  UnidadeUnidadeIdIndexRoute: UnidadeUnidadeIdIndexRoute,
 }
 
-const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
-  DashboardRouteChildren,
-)
+const UnidadeUnidadeIdRouteWithChildren =
+  UnidadeUnidadeIdRoute._addFileChildren(UnidadeUnidadeIdRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  DashboardRoute: DashboardRouteWithChildren,
   LoginRoute: LoginRoute,
+  RedeRoute: RedeRouteWithChildren,
+  UnidadeUnidadeIdRoute: UnidadeUnidadeIdRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

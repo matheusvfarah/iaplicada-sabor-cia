@@ -24,7 +24,7 @@ type UnidadeDetalhe = {
   horario_fechamento: string;
 };
 
-export const Route = createFileRoute("/dashboard/unit/$unitId/configuracoes")({
+export const Route = createFileRoute("/unidade/$unidadeId/configuracoes")({
   head: () => ({ meta: [{ title: "Configurações — Sabor & Cia" }] }),
   component: ConfiguracoesPage,
 });

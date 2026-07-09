@@ -16,15 +16,15 @@ function Index() {
     if (!session) {
       navigate({ to: "/login", replace: true });
     } else if (session.profile.role === "gestor_geral") {
-      navigate({ to: "/dashboard", replace: true });
+      navigate({ to: "/rede", replace: true });
     } else if (session.profile.unidade_id) {
       navigate({
-        to: "/dashboard/unit/$unitId",
-        params: { unitId: String(session.profile.unidade_id) },
+        to: "/unidade/$unidadeId",
+        params: { unidadeId: String(session.profile.unidade_id) },
         replace: true,
       });
     } else {
-      navigate({ to: "/dashboard", replace: true });
+      navigate({ to: "/rede", replace: true });
     }
   }, [ready, session, navigate]);
 

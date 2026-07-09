@@ -26,7 +26,7 @@ const TIPO_LABEL = {
   avaliacao: "Avaliação",
 };
 
-export const Route = createFileRoute("/dashboard/alertas")({
+export const Route = createFileRoute("/rede/alertas")({
   head: () => ({
     meta: [{ title: "Alertas — Sabor & Cia" }],
   }),

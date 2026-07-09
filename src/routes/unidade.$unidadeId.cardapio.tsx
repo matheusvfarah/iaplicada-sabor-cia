@@ -38,7 +38,7 @@ const CATEGORY_ICON: Record<string, typeof Package> = {
   sobremesas: IceCreamCone,
 };
 
-export const Route = createFileRoute("/dashboard/unit/$unitId/cardapio")({
+export const Route = createFileRoute("/unidade/$unidadeId/cardapio")({
   head: () => ({ meta: [{ title: "Cardápio — Sabor & Cia" }] }),
   component: CardapioPage,
 });

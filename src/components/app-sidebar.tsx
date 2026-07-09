@@ -8,6 +8,9 @@ import {
   Bell,
   Globe,
   LogOut,
+  ChevronLeft,
+  ChevronDown,
+  Store,
 } from "lucide-react";
 import {
   Sidebar,
@@ -15,12 +18,20 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
   useSidebar,
 } from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { BrandLogo } from "@/components/brand-logo";
 import { supabase } from "@/lib/supabase";
 import { signOut, useSession } from "@/lib/auth";
@@ -30,29 +41,36 @@ import { useAlertasCount } from "@/lib/use-alertas-count";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { isUnidadeAberta, useMinuteTick, type HorarioFuncionamento } from "@/lib/unidade-status";
+import { cn } from "@/lib/utils";
 
-const OPERACAO_ITEMS = [
+type UnidadeResumo = HorarioFuncionamento & {
+  id: number;
+  nome: string;
+  status: "ativa" | "inativa";
+};
+
+const UNIDADE_ITEMS = [
   {
-    to: "/dashboard/unit/$unitId" as const,
+    to: "/unidade/$unidadeId" as const,
     label: "Dashboard",
     icon: LayoutDashboard,
     exact: true,
   },
   {
-    to: "/dashboard/unit/$unitId/pedidos" as const,
+    to: "/unidade/$unidadeId/pedidos" as const,
     label: "Pedidos",
     icon: ClipboardList,
     exact: false,
     showPendentes: true,
   },
   {
-    to: "/dashboard/unit/$unitId/cardapio" as const,
+    to: "/unidade/$unidadeId/cardapio" as const,
     label: "Cardápio",
     icon: UtensilsCrossed,
     exact: false,
   },
   {
-    to: "/dashboard/unit/$unitId/configuracoes" as const,
+    to: "/unidade/$unidadeId/configuracoes" as const,
     label: "Configurações",
     icon: Settings,
     exact: false,
@@ -75,36 +93,52 @@ function activeNavClasses(active: boolean) {
     : "";
 }
 
+function statusDotClass(aberta: boolean) {
+  return aberta ? "bg-success" : "bg-sidebar-foreground/30";
+}
+
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { session } = useSession();
   const navigate = useNavigate();
   const { state, isMobile } = useSidebar();
   const collapsed = state === "collapsed" && !isMobile;
-  const [unit, setUnit] = useState<
-    (HorarioFuncionamento & { id: number; nome: string; status: "ativa" | "inativa" }) | null
-  >(null);
 
   const isAdmin = session?.profile.role === "gestor_geral";
-  const unidadeId = session?.profile.unidade_id ?? null;
 
+  // Gestor: modo unidade só quando a URL está debaixo de /unidade/:id.
+  // Gerente: sempre modo unidade (não tem "rede" pra ver).
+  const unitMatch = pathname.match(/^\/unidade\/(\d+)/);
+  const inUnitMode = isAdmin ? !!unitMatch : true;
+  const activeUnitId = isAdmin
+    ? unitMatch
+      ? Number(unitMatch[1])
+      : null
+    : (session?.profile.unidade_id ?? null);
+
+  const [unidades, setUnidades] = useState<UnidadeResumo[]>([]);
   useEffect(() => {
-    if (isAdmin || unidadeId == null) return;
     supabase
       .from("unidades")
       .select("id, nome, status, horario_abertura, horario_fechamento")
-      .eq("id", unidadeId)
-      .single()
-      .then(({ data }) => setUnit(data ?? null));
-  }, [isAdmin, unidadeId]);
-
+      .order("nome")
+      .then(({ data }) => setUnidades((data as UnidadeResumo[]) ?? []));
+  }, []);
   useMinuteTick();
-  const unitAberta = !!unit && unit.status === "ativa" && isUnidadeAberta(unit);
+
+  const currentUnit = unidades.find((u) => u.id === activeUnitId) ?? null;
+  const currentUnitAberta =
+    !!currentUnit && currentUnit.status === "ativa" && isUnidadeAberta(currentUnit);
 
   const isActive = (path: string) => pathname === path;
-  const recebidos = useRecebidosCount(isAdmin ? null : unidadeId);
-  const pedidosHoje = usePedidosHojeCount(isAdmin ? null : unidadeId);
+  const recebidos = useRecebidosCount(inUnitMode ? activeUnitId : null);
+  const pedidosHoje = usePedidosHojeCount(inUnitMode ? activeUnitId : null);
   const alertasCount = useAlertasCount();
+
+  function switchUnit(novoId: number) {
+    const suffix = pathname.replace(/^\/unidade\/\d+/, "");
+    navigate({ to: `/unidade/${novoId}${suffix}` });
+  }
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
@@ -113,127 +147,244 @@ export function AppSidebar() {
         <div className={collapsed ? "flex justify-center" : "px-2"}>
           <BrandLogo size="md" variant="on-dark" showText={!collapsed} />
         </div>
-
-        {!isAdmin && unit && !collapsed && (
-          <div className="mx-2 rounded-lg bg-sidebar-accent/60 px-3 py-2.5">
-            <p className="truncate text-xs font-semibold text-sidebar-foreground">{unit.nome}</p>
-            <div className="mt-1 flex items-center gap-1.5">
-              <span
-                className={`size-1.5 rounded-full ${
-                  unitAberta ? "bg-success" : "bg-sidebar-foreground/30"
-                }`}
-              />
-              <span className="text-[10px] text-sidebar-foreground/60">
-                {unitAberta ? "Aberta" : "Fechada"} · {pedidosHoje} pedido
-                {pedidosHoje === 1 ? "" : "s"} hoje
-              </span>
-            </div>
-          </div>
-        )}
-
-        {!isAdmin && unit && collapsed && (
-          <div
-            className="flex justify-center"
-            title={`${unit.nome} · ${unitAberta ? "Aberta" : "Fechada"}`}
-          >
-            <span
-              className={`size-2 rounded-full ${unitAberta ? "bg-success" : "bg-sidebar-foreground/30"}`}
-            />
-          </div>
-        )}
       </SidebarHeader>
 
       <SidebarContent>
-        {isAdmin ? (
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive("/dashboard")}
-                    tooltip="Rede"
-                    className={activeNavClasses(isActive("/dashboard"))}
+        {inUnitMode ? (
+          <>
+            <SidebarGroup className="pb-0">
+              <SidebarGroupContent>
+                {collapsed ? (
+                  <div
+                    className="flex justify-center py-1"
+                    title={
+                      currentUnit
+                        ? `${currentUnit.nome} · ${currentUnitAberta ? "Aberta" : "Fechada"}`
+                        : undefined
+                    }
                   >
-                    <Link to="/dashboard">
-                      <Globe />
-                      {!collapsed && <span>Rede</span>}
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem className="relative">
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive("/dashboard/alertas")}
-                    tooltip="Alertas"
-                    className={activeNavClasses(isActive("/dashboard/alertas"))}
-                  >
-                    <Link to="/dashboard/alertas">
-                      <Bell />
-                      {!collapsed && (
-                        <>
-                          <span className="flex-1">Alertas</span>
-                          {alertasCount > 0 && (
-                            <Badge
-                              variant="destructive"
-                              className="h-4 min-w-4 justify-center px-1 text-[10px]"
-                            >
-                              {alertasCount}
-                            </Badge>
+                    <span
+                      className={cn("size-2 rounded-full", statusDotClass(currentUnitAberta))}
+                    />
+                  </div>
+                ) : isAdmin ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex w-full items-center gap-2 rounded-lg bg-sidebar-accent/60 px-3 py-2.5 text-left hover:bg-sidebar-accent">
+                        <span
+                          className={cn(
+                            "size-1.5 shrink-0 rounded-full",
+                            statusDotClass(currentUnitAberta),
                           )}
-                        </>
-                      )}
-                    </Link>
-                  </SidebarMenuButton>
-                  {collapsed && alertasCount > 0 && (
-                    <span className="pointer-events-none absolute right-1 top-1 size-2 rounded-full bg-destructive" />
-                  )}
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ) : (
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {OPERACAO_ITEMS.map((item) => {
-                  const Icon = item.icon;
-                  const resolved = item.to.replace("$unitId", String(unidadeId));
-                  const active = item.exact ? pathname === resolved : pathname.startsWith(resolved);
-                  return (
-                    <SidebarMenuItem key={item.to} className="relative">
-                      <SidebarMenuButton
-                        asChild
-                        isActive={active}
-                        tooltip={item.label}
-                        className={activeNavClasses(active)}
-                      >
-                        <Link to={item.to} params={{ unitId: String(unidadeId) }}>
-                          <Icon />
-                          {!collapsed && (
-                            <>
-                              <span className="flex-1">{item.label}</span>
-                              {item.showPendentes && recebidos > 0 && (
-                                <Badge
-                                  variant="destructive"
-                                  className="h-4 min-w-4 justify-center px-1 text-[10px]"
-                                >
-                                  {recebidos}
-                                </Badge>
+                        />
+                        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-sidebar-foreground">
+                          {currentUnit?.nome ?? "Unidade"}
+                        </span>
+                        <ChevronDown className="size-3.5 shrink-0 text-sidebar-foreground/60" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-56">
+                      {unidades.map((u) => {
+                        const aberta = u.status === "ativa" && isUnidadeAberta(u);
+                        return (
+                          <DropdownMenuItem key={u.id} onClick={() => switchUnit(u.id)}>
+                            <span
+                              className={cn(
+                                "mr-2 size-1.5 shrink-0 rounded-full",
+                                aberta ? "bg-success" : "bg-muted-foreground/40",
                               )}
-                            </>
-                          )}
-                        </Link>
-                      </SidebarMenuButton>
-                      {collapsed && item.showPendentes && recebidos > 0 && (
-                        <span className="pointer-events-none absolute right-1 top-1 size-2 rounded-full bg-destructive" />
-                      )}
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+                            />
+                            <span className="truncate">{u.nome}</span>
+                          </DropdownMenuItem>
+                        );
+                      })}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <div className="rounded-lg bg-sidebar-accent/60 px-3 py-2.5">
+                    <p className="truncate text-xs font-semibold text-sidebar-foreground">
+                      {currentUnit?.nome ?? "Unidade"}
+                    </p>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <span
+                        className={cn("size-1.5 rounded-full", statusDotClass(currentUnitAberta))}
+                      />
+                      <span className="text-[10px] text-sidebar-foreground/60">
+                        {currentUnitAberta ? "Aberta" : "Fechada"} · {pedidosHoje} pedido
+                        {pedidosHoje === 1 ? "" : "s"} hoje
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {UNIDADE_ITEMS.map((item) => {
+                    const Icon = item.icon;
+                    const resolved = item.to.replace("$unidadeId", String(activeUnitId));
+                    const active = item.exact
+                      ? pathname === resolved
+                      : pathname.startsWith(resolved);
+                    return (
+                      <SidebarMenuItem key={item.to} className="relative">
+                        <SidebarMenuButton
+                          asChild
+                          isActive={active}
+                          tooltip={item.label}
+                          className={activeNavClasses(active)}
+                        >
+                          <Link to={item.to} params={{ unidadeId: String(activeUnitId) }}>
+                            <Icon />
+                            {!collapsed && (
+                              <>
+                                <span className="flex-1">{item.label}</span>
+                                {item.showPendentes && recebidos > 0 && (
+                                  <Badge
+                                    variant="destructive"
+                                    className="h-4 min-w-4 justify-center px-1 text-[10px]"
+                                  >
+                                    {recebidos}
+                                  </Badge>
+                                )}
+                              </>
+                            )}
+                          </Link>
+                        </SidebarMenuButton>
+                        {collapsed && item.showPendentes && recebidos > 0 && (
+                          <span className="pointer-events-none absolute right-1 top-1 size-2 rounded-full bg-destructive" />
+                        )}
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            {isAdmin && (
+              <>
+                <SidebarSeparator />
+                <SidebarGroup>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton asChild tooltip="Voltar à rede">
+                          <Link to="/rede">
+                            <ChevronLeft />
+                            {!collapsed && <span>Voltar à rede</span>}
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive("/rede")}
+                      tooltip="Dashboard Geral"
+                      className={activeNavClasses(isActive("/rede"))}
+                    >
+                      <Link to="/rede">
+                        <Globe />
+                        {!collapsed && <span>Dashboard Geral</span>}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem className="relative">
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive("/rede/alertas")}
+                      tooltip="Alertas"
+                      className={activeNavClasses(isActive("/rede/alertas"))}
+                    >
+                      <Link to="/rede/alertas">
+                        <Bell />
+                        {!collapsed && (
+                          <>
+                            <span className="flex-1">Alertas</span>
+                            {alertasCount > 0 && (
+                              <Badge
+                                variant="destructive"
+                                className="h-4 min-w-4 justify-center px-1 text-[10px]"
+                              >
+                                {alertasCount}
+                              </Badge>
+                            )}
+                          </>
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                    {collapsed && alertasCount > 0 && (
+                      <span className="pointer-events-none absolute right-1 top-1 size-2 rounded-full bg-destructive" />
+                    )}
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive("/rede/configuracoes")}
+                      tooltip="Configurações"
+                      className={activeNavClasses(isActive("/rede/configuracoes"))}
+                    >
+                      <Link to="/rede/configuracoes">
+                        <Settings />
+                        {!collapsed && <span>Configurações</span>}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <SidebarSeparator />
+
+            <SidebarGroup>
+              {!collapsed && <SidebarGroupLabel>Unidades</SidebarGroupLabel>}
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {unidades.map((u) => {
+                    const aberta = u.status === "ativa" && isUnidadeAberta(u);
+                    return (
+                      <SidebarMenuItem key={u.id} className="relative">
+                        <SidebarMenuButton asChild tooltip={u.nome}>
+                          <Link to="/unidade/$unidadeId" params={{ unidadeId: String(u.id) }}>
+                            <Store />
+                            {!collapsed && <span className="flex-1 truncate">{u.nome}</span>}
+                            {!collapsed && (
+                              <span
+                                className={cn(
+                                  "size-1.5 shrink-0 rounded-full",
+                                  statusDotClass(aberta),
+                                )}
+                              />
+                            )}
+                          </Link>
+                        </SidebarMenuButton>
+                        {collapsed && (
+                          <span
+                            className={cn(
+                              "pointer-events-none absolute right-1 top-1 size-1.5 rounded-full",
+                              statusDotClass(aberta),
+                            )}
+                          />
+                        )}
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
         )}
       </SidebarContent>
 
