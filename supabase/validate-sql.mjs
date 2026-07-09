@@ -18,6 +18,7 @@ const stub = `
   create or replace function auth.uid() returns uuid
     language sql stable as $$ select nullif(current_setting('app.uid', true), '')::uuid $$;
   create role anon nologin;
+  create role authenticated nologin;
 `;
 
 async function run(label, sql) {
@@ -35,6 +36,7 @@ for (const f of readdirSync(join(dir, "migrations")).sort()) {
   await run(f, readFileSync(join(dir, "migrations", f), "utf8"));
 }
 await run("seed.sql", readFileSync(join(dir, "seed.sql"), "utf8"));
+await run("seed_ops.sql", readFileSync(join(dir, "seed_ops.sql"), "utf8"));
 
 // Smoke tests -------------------------------------------------
 const q = async (label, sql) => {
@@ -67,10 +69,47 @@ await q("rpc_cancelamento_plataforma", "select * from rpc_cancelamento_plataform
 await q("rpc_resumo_mes", "select * from rpc_resumo_mes()");
 await q("rpc_pedidos_6m (3 linhas)", "select * from rpc_pedidos_6m() limit 3");
 await q("rpc_kpis_unidade(1)", "select * from rpc_kpis_unidade(1)");
+await q("rpc_kpis_unidade_periodo(1)", "select * from rpc_kpis_unidade_periodo(1, current_date - 6, current_date)");
+await q("rpc_tempo_medio_preparo(1)", "select rpc_tempo_medio_preparo(1, 7)");
+await q("rpc_itens_mais_vendidos(1)", "select * from rpc_itens_mais_vendidos(1, 5)");
 await q(
   "avaliacoes ruins hoje",
   "select nota, comentario from avaliacoes where nota <= 2 and data >= current_date",
 );
+
+// Transições de status do pedido --------------------------------
+const [{ id: pedidoTeste }] = (
+  await db.query("select id from pedidos where status = 'recebido' limit 1")
+).rows;
+
+let transicaoInvalidaFalhou = false;
+try {
+  await db.query(`update pedidos set status = 'entregue' where id = ${pedidoTeste}`);
+} catch {
+  transicaoInvalidaFalhou = true;
+}
+console.log("Transição recebido->entregue bloqueada:", transicaoInvalidaFalhou, "(esperado true)");
+if (!transicaoInvalidaFalhou) {
+  console.error("FAIL trigger: deveria ter bloqueado transição inválida");
+  process.exit(1);
+}
+
+await db.query(`update pedidos set status = 'preparando' where id = ${pedidoTeste}`);
+const [{ preparando_em }] = (
+  await db.query(`select preparando_em from pedidos where id = ${pedidoTeste}`)
+).rows;
+console.log("preparando_em setado ao entrar em preparando:", !!preparando_em, "(esperado true)");
+
+await db.query(`update pedidos set status = 'entregue' where id = ${pedidoTeste}`);
+const [{ entregue_em }] = (
+  await db.query(`select entregue_em from pedidos where id = ${pedidoTeste}`)
+).rows;
+console.log("entregue_em setado ao entrar em entregue:", !!entregue_em, "(esperado true)");
+
+if (!preparando_em || !entregue_em) {
+  console.error("FAIL trigger: timestamps de produção não foram setados");
+  process.exit(1);
+}
 
 // Teste de RLS: cria usuários fake e mede visibilidade ---------
 await db.exec(`

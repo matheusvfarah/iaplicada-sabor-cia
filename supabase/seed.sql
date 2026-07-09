@@ -53,21 +53,25 @@ insert into funcionarios (nome, unidade_id, cargo, email) values
 
 -- Cardápio (mesmo menu-base em cada unidade ativa) ---------------
 -- Alimenta o simulador de pedidos: cada pedido simulado sorteia
--- itens deste catálogo, respeitando a disponibilidade.
-insert into produtos (unidade_id, nome, preco, disponivel)
-select u.id, p.nome, p.preco, true
+-- itens deste catálogo, respeitando a disponibilidade. 1-2 itens
+-- pausados por unidade para demonstrar a tela de Cardápio.
+insert into produtos (unidade_id, nome, preco, categoria, descricao, disponivel)
+select u.id, p.nome, p.preco, p.categoria, p.descricao, p.disponivel
 from unidades u
 cross join (values
-  ('Marmita Fit Frango',        24.90),
-  ('Marmita Fit Carne',         26.90),
-  ('Bowl Vegetariano',          22.50),
-  ('Combo Burger Artesanal',    32.90),
-  ('Yakisoba Tradicional',      28.00),
-  ('Salada Caesar com Frango',  21.90),
-  ('Refrigerante Lata',          6.50),
-  ('Suco Natural 300ml',         8.90),
-  ('Sobremesa Brownie',          9.90)
-) as p(nome, preco)
+  ('Combo Burger Artesanal',   32.90, 'burgers',    'Blend 180g, queijo, molho da casa e fritas', true),
+  ('Cheeseburger Duplo',       28.90, 'burgers',    'Dois blends, cheddar e picles',               true),
+  ('Veggie Burger',            26.90, 'burgers',    'Hambúrguer de grão-de-bico e legumes grelhados', false),
+  ('Marmita Fit Frango',       24.90, 'pratos',     'Frango grelhado, arroz integral e legumes',   true),
+  ('Marmita Fit Carne',        26.90, 'pratos',     'Carne magra, batata doce e brócolis',         true),
+  ('Bowl Vegetariano',         22.50, 'pratos',     'Grãos, legumes assados e molho tahine',       true),
+  ('Yakisoba Tradicional',     28.00, 'pratos',     'Macarrão oriental com legumes e proteína',    true),
+  ('Salada Caesar com Frango', 21.90, 'pratos',     'Alface, frango grelhado, croutons e parmesão', true),
+  ('Refrigerante Lata',         6.50, 'bebidas',    'Lata 350ml',                                   true),
+  ('Suco Natural 300ml',        8.90, 'bebidas',    'Polpa de fruta natural, sem açúcar adicionado', true),
+  ('Sobremesa Brownie',         9.90, 'sobremesas', 'Brownie de chocolate com nozes',               true),
+  ('Petit Gateau',             14.90, 'sobremesas', 'Bolo de chocolate quente com sorvete',        false)
+) as p(nome, preco, categoria, descricao, disponivel)
 where u.status = 'ativa';
 
 -- Metas (6 meses × 4 unidades ativas) ---------------------------
