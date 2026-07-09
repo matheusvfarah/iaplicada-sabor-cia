@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Download, FileText, Star, Target, Trophy } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
 import { AlertsBadge } from "@/components/alerts-badge";
+import { PeriodFilter } from "@/components/period-filter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +28,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/lib/supabase";
 import { CURRENCY, CURRENCY_FULL } from "@/lib/currency";
 import { exportCSV, exportPDF } from "@/lib/export";
+import {
+  periodRange,
+  periodLabel as computePeriodLabel,
+  defaultCustomRange,
+  type PeriodId,
+} from "@/lib/period";
 
 type Plataforma = "ifood" | "rappi" | "proprio";
 type StatusPedido = "pendente" | "recebido" | "preparando" | "entregue" | "cancelado";
@@ -41,8 +48,8 @@ type Pedido = {
 };
 
 type KpiUnidade = {
-  receita_mes: number;
-  meta_receita: number | null;
+  receita: number;
+  meta: number | null;
   pct_meta: number | null;
   nota_media: number | null;
   total_avaliacoes: number;
@@ -60,6 +67,11 @@ type PedidoItemDetalhe = {
   quantidade: number;
   preco_unitario: number;
   produto: { id: number; nome: string; disponivel: boolean } | null;
+};
+
+type Unidade = {
+  id: number;
+  nome: string;
 };
 
 const PLATFORM_LABEL: Record<Plataforma, string> = {
@@ -98,29 +110,22 @@ const statusBadge: Record<StatusPedido, { label: string; className: string }> = 
 };
 
 export const Route = createFileRoute("/dashboard/unit/$unitId")({
-  loader: async ({ params }) => {
+  // Não consulta o Supabase aqui: esse loader roda no servidor (SSR) em
+  // reloads/navegação direta, e o client ali não tem a sessão de auth
+  // (ela só existe no localStorage do navegador) — RLS bloquearia
+  // qualquer usuário, mesmo logado. A busca real acontece no client,
+  // dentro do componente, igual o resto dos dados desta página.
+  loader: ({ params }) => {
     const unidadeId = Number(params.unitId);
     if (!Number.isFinite(unidadeId)) throw notFound();
-    const { data, error } = await supabase
-      .from("unidades")
-      .select("id, nome")
-      .eq("id", unidadeId)
-      .single();
-    if (error || !data) throw notFound();
-    return { unit: data };
+    return { unidadeId };
   },
-  head: ({ loaderData }) => ({
-    meta: loaderData
-      ? [
-          { title: `${loaderData.unit.nome} — Sabor & Cia` },
-          {
-            name: "description",
-            content: `Operação em tempo real da unidade ${loaderData.unit.nome} — pedidos, receita vs meta e avaliações.`,
-          },
-        ]
-      : [{ title: "Unidade — Sabor & Cia" }],
-  }),
-  notFoundComponent: () => (
+  notFoundComponent: () => <UnidadeNaoEncontrada />,
+  component: UnitDashboard,
+});
+
+function UnidadeNaoEncontrada() {
+  return (
     <div className="grid min-h-screen place-items-center bg-background p-6 text-center">
       <div className="max-w-sm">
         <p className="font-mono text-xs uppercase tracking-widest text-primary">
@@ -135,9 +140,8 @@ export const Route = createFileRoute("/dashboard/unit/$unitId")({
         </Button>
       </div>
     </div>
-  ),
-  component: UnitDashboard,
-});
+  );
+}
 
 function startOfToday() {
   const d = new Date();
@@ -146,7 +150,11 @@ function startOfToday() {
 }
 
 function UnitDashboard() {
-  const { unit } = Route.useLoaderData();
+  const { unidadeId } = Route.useLoaderData();
+  const [unit, setUnit] = useState<Unidade | null>(null);
+  const [unitNotFound, setUnitNotFound] = useState(false);
+  const [period, setPeriod] = useState<PeriodId>("6m");
+  const [customRange, setCustomRange] = useState(defaultCustomRange);
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<Pedido[]>([]);
   const [kpis, setKpis] = useState<KpiUnidade | null>(null);
@@ -155,9 +163,31 @@ function UnitDashboard() {
   const [pendingItens, setPendingItens] = useState<PedidoItemDetalhe[]>([]);
   const [resolvingPending, setResolvingPending] = useState(false);
 
+  // Busca a unidade no client (não no loader — ver comentário na rota).
   useEffect(() => {
     let active = true;
+    supabase
+      .from("unidades")
+      .select("id, nome")
+      .eq("id", unidadeId)
+      .single()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error || !data) setUnitNotFound(true);
+        else setUnit(data);
+      });
+    return () => {
+      active = false;
+    };
+  }, [unidadeId]);
+
+  useEffect(() => {
+    if (!unit) return;
+    if (period === "custom" && (!customRange.inicio || !customRange.fim)) return;
+
+    let active = true;
     setLoading(true);
+    const { p_inicio, p_fim } = periodRange(period, customRange);
 
     Promise.all([
       supabase
@@ -167,7 +197,7 @@ function UnitDashboard() {
         .neq("status", "pendente")
         .gte("data_pedido", startOfToday())
         .order("data_pedido", { ascending: false }),
-      supabase.rpc("rpc_kpis_unidade", { p_unidade: unit.id }),
+      supabase.rpc("rpc_kpis_unidade_periodo", { p_unidade: unit.id, p_inicio, p_fim }),
       supabase
         .from("pedidos")
         .select("id, unidade_id, valor, plataforma, status, data_pedido")
@@ -219,7 +249,7 @@ function UnitDashboard() {
       active = false;
       supabase.removeChannel(channel);
     };
-  }, [unit.id]);
+  }, [unit, period, customRange]);
 
   const currentPending = pendingQueue[0] ?? null;
 
@@ -244,10 +274,10 @@ function UnitDashboard() {
 
   const top5 = useMemo(() => [...orders].sort((a, b) => b.valor - a.valor).slice(0, 5), [orders]);
 
+  const periodLbl = useMemo(() => computePeriodLabel(period, customRange), [period, customRange]);
+
   const goalPct =
-    kpis?.meta_receita && kpis.meta_receita > 0
-      ? Math.min(100, (kpis.receita_mes / kpis.meta_receita) * 100)
-      : 0;
+    kpis?.meta && kpis.meta > 0 ? Math.min(100, ((kpis?.receita ?? 0) / kpis.meta) * 100) : 0;
 
   async function handleResolverPendente(novoStatus: "recebido" | "cancelado") {
     if (!currentPending) return;
@@ -274,7 +304,7 @@ function UnitDashboard() {
 
   const handleExportCSV = () => {
     exportCSV(
-      `sabor-cia-unidade-${unit.id}-pedidos`,
+      `sabor-cia-unidade-${unidadeId}-pedidos`,
       orders.map((o) => ({
         id: o.id,
         criado_em: o.data_pedido,
@@ -287,11 +317,13 @@ function UnitDashboard() {
 
   const handleExportPDF = () => {
     exportPDF(
-      `sabor-cia-unidade-${unit.id}`,
-      `Sabor & Cia — ${unit.nome}`,
-      JSON.stringify({ unit, kpis, orders }, null, 2),
+      `sabor-cia-unidade-${unidadeId}`,
+      `Sabor & Cia — ${unit?.nome ?? ""}`,
+      JSON.stringify({ unit, period, kpis, orders }, null, 2),
     );
   };
+
+  if (unitNotFound) return <UnidadeNaoEncontrada />;
 
   return (
     <>
@@ -367,7 +399,7 @@ function UnitDashboard() {
       </Dialog>
 
       <TopBar
-        title={unit.nome}
+        title={unit?.nome ?? "Carregando…"}
         subtitle="Operação em tempo real"
         actions={
           <>
@@ -404,12 +436,30 @@ function UnitDashboard() {
       />
 
       <div className="mx-auto w-full max-w-[1400px] space-y-6 p-4 sm:p-6 lg:p-8">
+        {/* Filter row */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              Período (receita, meta e nota)
+            </p>
+            <p className="mt-1 font-display text-lg font-semibold">
+              {period === "custom" ? periodLbl : `Últimos ${periodLbl.toLowerCase()}`}
+            </p>
+          </div>
+          <PeriodFilter
+            period={period}
+            onPeriodChange={setPeriod}
+            customRange={customRange}
+            onCustomRangeChange={setCustomRange}
+          />
+        </div>
+
         {/* Top KPIs */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                Receita do mês
+                Receita do período
                 <Target className="size-3.5 text-primary" />
               </CardTitle>
             </CardHeader>
@@ -419,10 +469,10 @@ function UnitDashboard() {
               ) : (
                 <>
                   <p className="font-display text-3xl font-bold">
-                    {CURRENCY.format(kpis?.receita_mes ?? 0)}
+                    {CURRENCY.format(kpis?.receita ?? 0)}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Meta: {CURRENCY.format(kpis?.meta_receita ?? 0)}
+                    Meta prorrateada: {CURRENCY.format(kpis?.meta ?? 0)}
                   </p>
                   <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface">
                     <div
@@ -441,7 +491,7 @@ function UnitDashboard() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                Nota do mês
+                Nota do período
                 <Star className="size-3.5 fill-primary text-primary" />
               </CardTitle>
             </CardHeader>

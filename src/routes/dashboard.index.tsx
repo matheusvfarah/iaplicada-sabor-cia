@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
@@ -16,13 +16,21 @@ import {
 import { Download, FileText, Flame, Store, TrendingDown, Trophy } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
 import { AlertsBadge } from "@/components/alerts-badge";
+import { PeriodFilter } from "@/components/period-filter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/lib/supabase";
 import { CURRENCY } from "@/lib/currency";
 import { exportCSV, exportPDF } from "@/lib/export";
+import {
+  parseDateOnly,
+  periodRange,
+  periodLabel as computePeriodLabel,
+  defaultCustomRange,
+  type PeriodId,
+  type Granularidade,
+} from "@/lib/period";
 
 export const Route = createFileRoute("/dashboard/")({
   head: () => ({
@@ -38,25 +46,10 @@ export const Route = createFileRoute("/dashboard/")({
   component: GeneralDashboard,
 });
 
-const PERIODS = [
-  { id: "7d", label: "7 dias" },
-  { id: "30d", label: "30 dias" },
-  { id: "6m", label: "6 meses" },
-  { id: "ytd", label: "Ano" },
-] as const;
-type PeriodId = (typeof PERIODS)[number]["id"];
-
 const PLATFORM_LABEL: Record<string, string> = {
   ifood: "iFood",
   rappi: "Rappi",
   proprio: "Próprio",
-};
-
-type ResumoMes = {
-  receita_total: number;
-  meta_total: number;
-  pct_meta: number | null;
-  total_pedidos: number;
 };
 
 type KpiUnidade = {
@@ -67,8 +60,8 @@ type KpiUnidade = {
   ticket_medio: number;
 };
 
-type Pedidos6m = {
-  mes: string;
+type FaturamentoSerie = {
+  bucket: string;
   unidade_id: number;
   unidade_nome: string;
   total_pedidos: number;
@@ -82,19 +75,6 @@ type CancelamentoPlataforma = {
   taxa: number;
 };
 
-function periodRange(period: PeriodId) {
-  const fim = new Date();
-  const inicio = new Date(fim);
-  if (period === "7d") inicio.setDate(inicio.getDate() - 6);
-  else if (period === "30d") inicio.setDate(inicio.getDate() - 29);
-  else if (period === "6m") inicio.setMonth(inicio.getMonth() - 6);
-  else inicio.setMonth(0, 1);
-  return {
-    p_inicio: inicio.toISOString().slice(0, 10),
-    p_fim: fim.toISOString().slice(0, 10),
-  };
-}
-
 const CHART_COLORS = [
   "var(--chart-1)",
   "var(--chart-2)",
@@ -105,35 +85,40 @@ const CHART_COLORS = [
 
 function GeneralDashboard() {
   const [period, setPeriod] = useState<PeriodId>("6m");
+  const [customRange, setCustomRange] = useState(defaultCustomRange);
   const [loading, setLoading] = useState(true);
-  const [resumo, setResumo] = useState<ResumoMes | null>(null);
+  const [metaPeriodo, setMetaPeriodo] = useState(0);
   const [kpisUnidades, setKpisUnidades] = useState<KpiUnidade[]>([]);
-  const [pedidos6m, setPedidos6m] = useState<Pedidos6m[]>([]);
+  const [serieFaturamento, setSerieFaturamento] = useState<FaturamentoSerie[]>([]);
   const [cancelamento, setCancelamento] = useState<CancelamentoPlataforma[]>([]);
+  const [granularidade, setGranularidade] = useState<Granularidade>("month");
 
   useEffect(() => {
+    if (period === "custom" && (!customRange.inicio || !customRange.fim)) return;
+
     let active = true;
     setLoading(true);
-    const { p_inicio, p_fim } = periodRange(period);
+    const { p_inicio, p_fim, granularidade: gran } = periodRange(period, customRange);
 
     Promise.all([
-      supabase.rpc("rpc_resumo_mes"),
+      supabase.rpc("rpc_meta_periodo", { p_inicio, p_fim }),
       supabase.rpc("rpc_kpis_unidades", { p_inicio, p_fim }),
-      supabase.rpc("rpc_pedidos_6m"),
+      supabase.rpc("rpc_faturamento_serie", { p_inicio, p_fim }),
       supabase.rpc("rpc_cancelamento_plataforma", { p_inicio, p_fim }),
-    ]).then(([resumoRes, kpisRes, pedidos6mRes, cancelamentoRes]) => {
+    ]).then(([metaRes, kpisRes, serieRes, cancelamentoRes]) => {
       if (!active) return;
-      setResumo(resumoRes.data?.[0] ?? null);
+      setMetaPeriodo(metaRes.data ?? 0);
       setKpisUnidades(kpisRes.data ?? []);
-      setPedidos6m(pedidos6mRes.data ?? []);
+      setSerieFaturamento(serieRes.data ?? []);
       setCancelamento(cancelamentoRes.data ?? []);
+      setGranularidade(gran);
       setLoading(false);
     });
 
     return () => {
       active = false;
     };
-  }, [period]);
+  }, [period, customRange]);
 
   const ranking = useMemo(
     () => [...kpisUnidades].sort((a, b) => b.receita - a.receita),
@@ -141,30 +126,36 @@ function GeneralDashboard() {
   );
 
   const unidadesOrdenadas = useMemo(
-    () => [...new Set(pedidos6m.map((p) => p.unidade_id))].sort((a, b) => a - b),
-    [pedidos6m],
+    () => [...new Set(serieFaturamento.map((p) => p.unidade_id))].sort((a, b) => a - b),
+    [serieFaturamento],
   );
 
-  const monthlyChartData = useMemo(() => {
-    const byMonth = new Map<string, Record<string, number | string>>();
-    for (const row of pedidos6m) {
-      const key = row.mes;
-      if (!byMonth.has(key)) byMonth.set(key, { mes: key });
-      byMonth.get(key)![`unidade_${row.unidade_id}`] = row.receita / 1000;
+  const chartData = useMemo(() => {
+    const byBucket = new Map<string, Record<string, number | string>>();
+    for (const row of serieFaturamento) {
+      const key = row.bucket;
+      if (!byBucket.has(key)) byBucket.set(key, { bucket: key });
+      byBucket.get(key)![`unidade_${row.unidade_id}`] = Math.round(row.receita / 100) / 10;
     }
-    return [...byMonth.entries()]
+    return [...byBucket.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([mes, row]) => ({
+      .map(([bucket, row]) => ({
         ...row,
-        label: new Date(mes).toLocaleDateString("pt-BR", { month: "short" }),
+        label:
+          granularidade === "month"
+            ? parseDateOnly(bucket).toLocaleDateString("pt-BR", { month: "short" })
+            : parseDateOnly(bucket).toLocaleDateString("pt-BR", {
+                day: "2-digit",
+                month: "2-digit",
+              }),
       }));
-  }, [pedidos6m]);
+  }, [serieFaturamento, granularidade]);
 
   const unidadeNomes = useMemo(() => {
     const map = new Map<number, string>();
-    for (const row of pedidos6m) map.set(row.unidade_id, row.unidade_nome);
+    for (const row of serieFaturamento) map.set(row.unidade_id, row.unidade_nome);
     return map;
-  }, [pedidos6m]);
+  }, [serieFaturamento]);
 
   const cancelamentoChart = cancelamento.map((c) => ({
     name: PLATFORM_LABEL[c.plataforma] ?? c.plataforma,
@@ -177,13 +168,27 @@ function GeneralDashboard() {
     return total > 0 ? (cancelados / total) * 100 : 0;
   }, [cancelamento]);
 
-  const ticketMedioRede = useMemo(() => {
-    const receita = kpisUnidades.reduce((s, u) => s + u.receita, 0);
-    const pedidos = kpisUnidades.reduce((s, u) => s + u.pedidos, 0);
-    return pedidos > 0 ? receita / pedidos : 0;
-  }, [kpisUnidades]);
+  const receitaPeriodo = useMemo(
+    () => kpisUnidades.reduce((s, u) => s + u.receita, 0),
+    [kpisUnidades],
+  );
+  const pedidosPeriodo = useMemo(
+    () => kpisUnidades.reduce((s, u) => s + u.pedidos, 0),
+    [kpisUnidades],
+  );
 
-  const gaugePct = Math.round((resumo?.pct_meta ?? 0) * 1000) / 10;
+  const ticketMedioRede = pedidosPeriodo > 0 ? receitaPeriodo / pedidosPeriodo : 0;
+
+  const periodLabel = useMemo(() => computePeriodLabel(period, customRange), [period, customRange]);
+
+  const granularidadeLabel =
+    granularidade === "day"
+      ? " · por dia"
+      : granularidade === "week"
+        ? " · por semana"
+        : " · por mês";
+
+  const gaugePct = metaPeriodo > 0 ? Math.round((receitaPeriodo / metaPeriodo) * 1000) / 10 : 0;
 
   const handleExportCSV = () => {
     exportCSV(
@@ -201,7 +206,7 @@ function GeneralDashboard() {
     exportPDF(
       "sabor-cia-dashboard-geral",
       "Sabor & Cia — Dashboard Geral",
-      JSON.stringify({ period, resumo, ranking }, null, 2),
+      JSON.stringify({ period, receitaPeriodo, pedidosPeriodo, metaPeriodo, ranking }, null, 2),
     );
   };
 
@@ -248,24 +253,22 @@ function GeneralDashboard() {
 
       <div className="mx-auto w-full max-w-[1400px] space-y-6 p-4 sm:p-6 lg:p-8">
         {/* Filter row */}
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:flex sm:flex-wrap sm:justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
             <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
               Período
             </p>
             <p className="mt-1 font-display text-lg font-semibold">
-              Últimos {PERIODS.find((p) => p.id === period)?.label.toLowerCase()}
+              {period === "custom" ? periodLabel : `Últimos ${periodLabel.toLowerCase()}`}
             </p>
           </div>
-          <Tabs value={period} onValueChange={(v) => setPeriod(v as PeriodId)}>
-            <TabsList>
-              {PERIODS.map((p) => (
-                <TabsTrigger key={p.id} value={p.id}>
-                  {p.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+
+          <PeriodFilter
+            period={period}
+            onPeriodChange={setPeriod}
+            customRange={customRange}
+            onCustomRangeChange={setCustomRange}
+          />
         </div>
 
         {loading ? (
@@ -283,12 +286,14 @@ function GeneralDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                        Meta do Mês
+                        Meta do Período
                       </p>
                       <p className="mt-1 font-display text-3xl font-bold">{gaugePct.toFixed(1)}%</p>
                       <p className="mt-1 text-[11px] text-muted-foreground">
-                        {CURRENCY.format(resumo?.receita_total ?? 0)} de{" "}
-                        {CURRENCY.format(resumo?.meta_total ?? 0)}
+                        {CURRENCY.format(receitaPeriodo)} de {CURRENCY.format(metaPeriodo)}
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+                        Meta mensal prorrateada · {periodLabel}
                       </p>
                     </div>
                     <Gauge value={Math.min(100, gaugePct)} />
@@ -299,18 +304,18 @@ function GeneralDashboard() {
               <KpiCard
                 label="Ticket Médio Rede"
                 value={CURRENCY.format(ticketMedioRede)}
-                hint={`${PERIODS.find((p) => p.id === period)?.label}`}
+                hint={periodLabel}
               />
               <KpiCard
                 label="Cancelamentos"
                 value={`${cancelamentoRedeTaxa.toFixed(1)}%`}
-                hint={`${PERIODS.find((p) => p.id === period)?.label}`}
+                hint={periodLabel}
                 accent
               />
               <KpiCard
                 label="Faturamento Total"
-                value={CURRENCY.format(resumo?.receita_total ?? 0)}
-                hint={`${(resumo?.total_pedidos ?? 0).toLocaleString("pt-BR")} pedidos no mês`}
+                value={CURRENCY.format(receitaPeriodo)}
+                hint={`${pedidosPeriodo.toLocaleString("pt-BR")} pedidos · ${periodLabel}`}
               />
             </div>
 
@@ -320,10 +325,11 @@ function GeneralDashboard() {
                 <CardHeader className="flex flex-row items-center justify-between space-y-0">
                   <div>
                     <CardTitle className="font-display text-base">
-                      Faturamento — últimos 6 meses
+                      Faturamento — {periodLabel.toLowerCase()}
                     </CardTitle>
                     <p className="mt-1 text-xs text-muted-foreground">
                       Valores em milhares de reais (R$k)
+                      {granularidadeLabel}
                     </p>
                   </div>
                   <Flame className="size-4 text-primary" />
@@ -331,10 +337,7 @@ function GeneralDashboard() {
                 <CardContent>
                   <div className="h-[320px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={monthlyChartData}
-                        margin={{ top: 8, right: 8, left: -8, bottom: 0 }}
-                      >
+                      <BarChart data={chartData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
                         <CartesianGrid
                           strokeDasharray="3 3"
                           stroke="var(--border)"
@@ -362,7 +365,7 @@ function GeneralDashboard() {
                             borderRadius: 8,
                             fontSize: 12,
                           }}
-                          formatter={(v: number) => [`R$ ${v}k`, ""]}
+                          formatter={(v: number, name: string) => [`R$ ${v.toFixed(1)}k`, name]}
                         />
                         <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" />
                         {unidadesOrdenadas.map((id, i) => (
@@ -430,9 +433,11 @@ function GeneralDashboard() {
                   ) : (
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                       {kpisUnidades.map((u) => (
-                        <div
+                        <Link
                           key={u.unidade_id}
-                          className="rounded-lg border border-border bg-surface p-4 transition-colors hover:bg-surface-hover"
+                          to="/dashboard/unit/$unitId"
+                          params={{ unitId: String(u.unidade_id) }}
+                          className="rounded-lg border border-border bg-surface p-4 transition-colors hover:border-primary/40 hover:bg-surface-hover"
                         >
                           <div className="flex items-center justify-between">
                             <p className="truncate text-xs font-medium text-muted-foreground">
@@ -446,7 +451,7 @@ function GeneralDashboard() {
                           <p className="mt-0.5 text-[10px] text-muted-foreground">
                             {u.pedidos.toLocaleString("pt-BR")} pedidos
                           </p>
-                        </div>
+                        </Link>
                       ))}
                     </div>
                   )}
@@ -489,7 +494,9 @@ function GeneralDashboard() {
                               borderRadius: 8,
                               fontSize: 12,
                             }}
-                            formatter={(v: number) => [`${v}%`, ""]}
+                            itemStyle={{ color: "var(--foreground)" }}
+                            labelStyle={{ color: "var(--foreground)" }}
+                            formatter={(v: number, name: string) => [`${v.toFixed(1)}%`, name]}
                           />
                           <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
                         </PieChart>
