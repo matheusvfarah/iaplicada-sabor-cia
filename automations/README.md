@@ -17,27 +17,51 @@ de alertas, os pedidos "chegam" simulados por um cron do n8n, aparecem como
 popup de aceite/recusa pro gerente (com os itens e disponibilidade atual do
 cardápio), fechando um loop de operação mais realista.
 
-1. **Schedule Trigger** — intervalo curto fixo (ex.: a cada 2 min). n8n não
-   tem "intervalo aleatório" nativo sem um loop de Wait, então a aleatoriedade
-   fica no passo seguinte.
-2. **Code node** — sorteia: dispara ou não nessa execução (ex.: ~40% de
-   chance, pra simular chegada irregular), uma unidade ativa, 1–4 produtos
-   disponíveis dessa unidade e as quantidades.
-3. **HTTP Request node** — `POST` em `<URL_DO_APP>/api/pedidos/simular`, header
-   `x-webhook-secret: <ORDER_SIMULATOR_SECRET>`, body
-   `{ unidade_id, plataforma, itens: [{ produto_id, quantidade }] }`.
-4. O endpoint (implementado em `src/server.ts` /
-   `src/lib/order-simulator-handler.ts`) valida o secret, calcula o valor a
-   partir do preço atual do cardápio (nunca confia no payload) e insere o
-   pedido com status `pendente` via RPC atômica
-   (`rpc_inserir_pedido_simulado`).
-5. O pedido aparece **ao vivo** (Supabase Realtime) como popup no Dashboard da
-   Unidade — o gerente aceita (`recebido`) ou recusa (`cancelado`, populando
-   `log_cancelamentos` via trigger já existente).
+Workflow pronto pra importar em **[`simulador-pedidos.json`](./simulador-pedidos.json)**
+(`Workflows → Import from File` no n8n). 5 nodes:
 
-Configuração em produção: `ORDER_SIMULATOR_SECRET` como variável de ambiente
-no n8n (nunca hardcoded no workflow), URL do endpoint apontando pro deploy
-Vercel.
+1. **Schedule Trigger** — a cada 2 min. n8n não tem "intervalo aleatório"
+   nativo sem um loop de Wait, então a aleatoriedade fica no node seguinte.
+2. **Code — "Sorteia disparo e unidade"** — ~40% de chance de realmente virar
+   um pedido nessa execução (senão retorna `[]` e a cadeia para ali, sem
+   pedidos vazios); sorteia uma unidade ativa (`[1,2,3,4]` — Centro,
+   Pinheiros, Moema, Santana) e a plataforma (`ifood`/`rappi`/`proprio`).
+3. **HTTP Request — "Busca cardápio disponível"** — `POST` na RPC pública
+   `rpc_cardapio_disponivel` (nova, migration `20260709000014`) com a `anon
+   key`. Sem isso o gerador ficaria cego sobre preços/disponibilidade e teria
+   que adivinhar `produto_id`, quebrando toda vez que um item fosse pausado
+   no Cardápio — RLS normal de `produtos` exige usuário autenticado, então
+   essa RPC é `security definer`, expondo só `produto_id`/`nome`/`preco` dos
+   itens com `disponivel = true` da unidade pedida (equivalente a qualquer
+   cardápio público de verdade, nada sensível).
+4. **Code — "Monta itens do pedido"** — do cardápio retornado, sorteia 1 a 4
+   itens distintos e quantidades (1–3 cada), montando o payload final.
+5. **HTTP Request — "Envia pedido simulado"** — `POST` em
+   `{{ $env.APP_URL }}/api/pedidos/simular`, header `x-webhook-secret`.
+
+O endpoint (implementado em `src/server.ts` /
+`src/lib/order-simulator-handler.ts`) valida o secret, calcula o valor a
+partir do preço atual do cardápio (nunca confia no payload) e insere o
+pedido com status `pendente` via RPC atômica (`rpc_inserir_pedido_simulado`).
+O pedido aparece **ao vivo** (Supabase Realtime) como popup no Dashboard da
+Unidade — o gerente aceita (`recebido`) ou recusa (`cancelado`, populando
+`log_cancelamentos` via trigger já existente).
+
+**Variáveis de ambiente do n8n** (`Settings → Environments` ou variáveis do
+workflow, nunca hardcoded nos nodes):
+
+| Variável                 | Valor                                                          |
+| ------------------------- | --------------------------------------------------------------- |
+| `SUPABASE_URL`             | mesma de `VITE_SUPABASE_URL` no `.env` do app                   |
+| `SUPABASE_ANON_KEY`        | mesma de `VITE_SUPABASE_ANON_KEY` (pública, só lê cardápio)      |
+| `APP_URL`                  | URL do deploy (Vercel) ou túnel local (ex. ngrok) em dev          |
+| `ORDER_SIMULATOR_SECRET`   | mesmo valor configurado no servidor do app                       |
+
+O JSON foi validado como sintaticamente correto e revisado nó a nó contra o
+schema desta versão do n8n — a importação (`n8n import:workflow` ou
+`Workflows → Import from File`) e a ativação ficam pro ambiente onde o cron
+vai rodar de verdade (local ou n8n Cloud), propositalmente fora do escopo
+automatizado aqui.
 
 ### Contrato do endpoint `/api/pedidos/simular`
 
