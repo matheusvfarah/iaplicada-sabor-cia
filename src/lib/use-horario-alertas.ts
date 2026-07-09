@@ -59,6 +59,7 @@ export function useHorarioAlertas(unidades: UnidadeParaAlerta[], toastEnabled = 
   useMinuteTick();
   const [lidos, setLidos] = useState<Set<string>>(() => readSet(LIDOS_KEY));
   const notificadosRef = useRef<Set<string>>(readSet(NOTIFICADOS_KEY));
+  const lastMinutosRef = useRef<Map<string, number>>(new Map());
 
   const alertas = useMemo<HorarioAlerta[]>(() => {
     const dia = hojeSaoPaulo();
@@ -78,6 +79,35 @@ export function useHorarioAlertas(unidades: UnidadeParaAlerta[], toastEnabled = 
     }
     return out;
   }, [unidades]);
+
+  // Reentrada na janela (ex.: horário editado de novo no mesmo dia,
+  // ou testado várias vezes) — se os minutos restantes SOBEM em vez de
+  // descer, é uma ocorrência nova, não o mesmo aviso de antes. Sem
+  // isso, marcar como lido/já notificado uma vez suprimiria qualquer
+  // novo aviso pro resto do dia mesmo com o horário mudando de novo.
+  useEffect(() => {
+    let mudouLidos = false;
+    let mudouNotificados = false;
+    const proximosLidos = new Set(lidos);
+
+    for (const a of alertas) {
+      const last = lastMinutosRef.current.get(a.key);
+      if (last != null && a.minutos > last + 2) {
+        if (proximosLidos.delete(a.key)) mudouLidos = true;
+        if (notificadosRef.current.delete(a.key)) mudouNotificados = true;
+      }
+      lastMinutosRef.current.set(a.key, a.minutos);
+    }
+
+    if (mudouLidos) {
+      setLidos(proximosLidos);
+      writeSet(LIDOS_KEY, proximosLidos);
+    }
+    if (mudouNotificados) {
+      writeSet(NOTIFICADOS_KEY, notificadosRef.current);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só precisa rodar quando `alertas` muda; `lidos` é lido via closure mas não deve disparar o efeito de novo
+  }, [alertas]);
 
   useEffect(() => {
     if (!toastEnabled) return;
