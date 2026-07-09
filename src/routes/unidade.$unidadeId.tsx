@@ -94,6 +94,24 @@ function SemUnidadeVinculada() {
   );
 }
 
+// Precisa ser um componente separado, renderizado dentro de <AppShell>
+// (que monta o NotificacoesProvider) — chamar useNotificacoesCtx() no
+// próprio UnitLayout quebraria, já que o Provider só existe abaixo
+// dele na árvore, nunca acima.
+function HorarioBanner({ unidadeId }: { unidadeId: number }) {
+  const { notificacoes } = useNotificacoesCtx();
+  const proximaVirada = notificacoes.find(
+    (n) => TIPOS_HORARIO.has(n.tipo) && n.unidade_id === unidadeId,
+  );
+  if (!proximaVirada) return null;
+  return (
+    <div className="flex items-center justify-center gap-1.5 border-b border-border bg-accent-tint px-4 py-1.5 text-center text-xs font-medium text-accent-tint-foreground">
+      <Clock className="size-3.5 shrink-0" />
+      {proximaVirada.mensagem}
+    </div>
+  );
+}
+
 function UnitLayout() {
   const { unidadeId } = Route.useLoaderData();
   const { session, ready } = useSession();
@@ -125,14 +143,6 @@ function UnitLayout() {
       replace: true,
     });
   }, [isGerenteForaDaUnidade, session, navigate]);
-
-  // Aviso 30 min antes de abrir/fechar: banner discreto derivado da
-  // mesma notificação vai_abrir/vai_fechar que já chega pelo sino —
-  // nasce no banco (gerar_notificacoes()), o front só lê e exibe de
-  // dois jeitos (banner fixo + item no sino).
-  const { notificacoes } = useNotificacoesCtx();
-  const proximaVirada =
-    notificacoes.find((n) => TIPOS_HORARIO.has(n.tipo) && n.unidade_id === unidadeId) ?? null;
 
   // Fila de pedidos pendentes (chegada simulada) — global à área da
   // unidade, aparece em qualquer subpágina (Dashboard/Pedidos/Cardápio).
@@ -317,12 +327,7 @@ function UnitLayout() {
           </DialogContent>
         </Dialog>
 
-        {proximaVirada && (
-          <div className="flex items-center justify-center gap-1.5 border-b border-border bg-accent-tint px-4 py-1.5 text-center text-xs font-medium text-accent-tint-foreground">
-            <Clock className="size-3.5 shrink-0" />
-            {proximaVirada.mensagem}
-          </div>
-        )}
+        <HorarioBanner unidadeId={unit.id} />
         <UnitNav unidadeId={unit.id} />
         <div className="pb-16 sm:pb-0">
           <Outlet />
