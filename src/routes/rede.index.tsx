@@ -101,6 +101,8 @@ function GeneralDashboard() {
   const [cancelamento, setCancelamento] = useState<CancelamentoPlataforma[]>([]);
   const [granularidade, setGranularidade] = useState<Granularidade>("month");
   const [kpisUnidadesAnterior, setKpisUnidadesAnterior] = useState<KpiUnidade[]>([]);
+  const [metaPeriodoAnterior, setMetaPeriodoAnterior] = useState(0);
+  const [cancelamentoAnterior, setCancelamentoAnterior] = useState<CancelamentoPlataforma[]>([]);
 
   useEffect(() => {
     if (period === "custom" && (!customRange.inicio || !customRange.fim)) return;
@@ -116,16 +118,30 @@ function GeneralDashboard() {
       supabase.rpc("rpc_faturamento_serie", { p_inicio, p_fim }),
       supabase.rpc("rpc_cancelamento_plataforma", { p_inicio, p_fim }),
       supabase.rpc("rpc_kpis_unidades", anterior),
-    ]).then(([metaRes, kpisRes, serieRes, cancelamentoRes, kpisAnteriorRes]) => {
-      if (!active) return;
-      setMetaPeriodo(metaRes.data ?? 0);
-      setKpisUnidades(kpisRes.data ?? []);
-      setSerieFaturamento(serieRes.data ?? []);
-      setCancelamento(cancelamentoRes.data ?? []);
-      setKpisUnidadesAnterior(kpisAnteriorRes.data ?? []);
-      setGranularidade(gran);
-      setLoading(false);
-    });
+      supabase.rpc("rpc_meta_periodo", anterior),
+      supabase.rpc("rpc_cancelamento_plataforma", anterior),
+    ]).then(
+      ([
+        metaRes,
+        kpisRes,
+        serieRes,
+        cancelamentoRes,
+        kpisAnteriorRes,
+        metaAnteriorRes,
+        cancelamentoAnteriorRes,
+      ]) => {
+        if (!active) return;
+        setMetaPeriodo(metaRes.data ?? 0);
+        setKpisUnidades(kpisRes.data ?? []);
+        setSerieFaturamento(serieRes.data ?? []);
+        setCancelamento(cancelamentoRes.data ?? []);
+        setKpisUnidadesAnterior(kpisAnteriorRes.data ?? []);
+        setMetaPeriodoAnterior(metaAnteriorRes.data ?? 0);
+        setCancelamentoAnterior(cancelamentoAnteriorRes.data ?? []);
+        setGranularidade(gran);
+        setLoading(false);
+      },
+    );
 
     return () => {
       active = false;
@@ -218,6 +234,16 @@ function GeneralDashboard() {
         : " · por mês";
 
   const gaugePct = metaPeriodo > 0 ? Math.round((receitaPeriodo / metaPeriodo) * 1000) / 10 : 0;
+  const gaugePctAnterior =
+    metaPeriodoAnterior > 0
+      ? Math.round((receitaPeriodoAnterior / metaPeriodoAnterior) * 1000) / 10
+      : 0;
+
+  const cancelamentoRedeTaxaAnterior = useMemo(() => {
+    const total = cancelamentoAnterior.reduce((s, c) => s + c.total, 0);
+    const cancelados = cancelamentoAnterior.reduce((s, c) => s + c.cancelados, 0);
+    return total > 0 ? (cancelados / total) * 100 : 0;
+  }, [cancelamentoAnterior]);
 
   const handleExportCSV = () => {
     exportCSV(
@@ -300,6 +326,9 @@ function GeneralDashboard() {
                       <p className="mt-1 font-display text-3xl font-bold tabular-nums">
                         {gaugePct.toFixed(1)}%
                       </p>
+                      <div className="mt-1.5">
+                        <KpiDelta current={gaugePct} previous={gaugePctAnterior} />
+                      </div>
                       <p className="mt-1 text-[11px] text-muted-foreground">
                         {CURRENCY.format(receitaPeriodo)} de {CURRENCY.format(metaPeriodo)}
                       </p>
@@ -323,6 +352,13 @@ function GeneralDashboard() {
                 value={`${cancelamentoRedeTaxa.toFixed(1)}%`}
                 hint={periodLabel}
                 danger
+                delta={
+                  <KpiDelta
+                    current={cancelamentoRedeTaxa}
+                    previous={cancelamentoRedeTaxaAnterior}
+                    invert
+                  />
+                }
               />
               <KpiCard
                 label="Faturamento Total"
@@ -554,8 +590,8 @@ function KpiCard({
         >
           {value}
         </p>
+        {delta && <div className="mt-1.5">{delta}</div>}
         <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>
-        {delta && <div className="mt-1">{delta}</div>}
       </CardContent>
     </Card>
   );

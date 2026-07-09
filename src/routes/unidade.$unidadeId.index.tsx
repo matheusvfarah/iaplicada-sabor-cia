@@ -108,7 +108,9 @@ function UnitDashboardIndex() {
     proprio: 0,
   });
   const [serieFaturamento, setSerieFaturamento] = useState<FaturamentoSerie[]>([]);
-  const [receitaAnterior, setReceitaAnterior] = useState(0);
+  const [kpisAnterior, setKpisAnterior] = useState<KpiUnidade | null>(null);
+  const [tempoMedioPreparoAnterior, setTempoMedioPreparoAnterior] = useState<number | null>(null);
+  const [cancelamentosAnterior, setCancelamentosAnterior] = useState(0);
 
   useEffect(() => {
     if (period === "custom" && (!customRange.inicio || !customRange.fim)) return;
@@ -150,6 +152,18 @@ function UnitDashboardIndex() {
         .gte("data_pedido", p_inicio)
         .lt("data_pedido", fimLimite),
       supabase.rpc("rpc_faturamento_serie", { p_inicio, p_fim }),
+      supabase.rpc("rpc_tempo_medio_preparo", {
+        p_unidade: unit.id,
+        p_inicio: anterior.p_inicio,
+        p_fim: anterior.p_fim,
+      }),
+      supabase
+        .from("pedidos")
+        .select("id", { count: "exact", head: true })
+        .eq("unidade_id", unit.id)
+        .eq("status", "cancelado")
+        .gte("data_pedido", anterior.p_inicio)
+        .lt("data_pedido", `${anterior.p_fim}T23:59:59`),
     ]).then(
       ([
         kpisRes,
@@ -160,10 +174,12 @@ function UnitDashboardIndex() {
         cancelamentosRes,
         plataformasRes,
         serieRes,
+        tempoAnteriorRes,
+        cancelamentosAnteriorRes,
       ]) => {
         if (!active) return;
         setKpis(kpisRes.data?.[0] ?? null);
-        setReceitaAnterior(kpisAnteriorRes.data?.[0]?.receita ?? 0);
+        setKpisAnterior(kpisAnteriorRes.data?.[0] ?? null);
         setTop5(top5Res.data ?? []);
         setTempoMedioPreparo(tempoRes.data ?? null);
         setItensMaisVendidos(itensRes.data ?? []);
@@ -176,6 +192,8 @@ function UnitDashboardIndex() {
         setSerieFaturamento(
           ((serieRes.data ?? []) as FaturamentoSerie[]).filter((r) => r.unidade_id === unit.id),
         );
+        setTempoMedioPreparoAnterior(tempoAnteriorRes.data ?? null);
+        setCancelamentosAnterior(cancelamentosAnteriorRes.count ?? 0);
         setLoading(false);
       },
     );
@@ -284,11 +302,11 @@ function UnitDashboardIndex() {
                 <Skeleton className="h-16 w-full" />
               ) : (
                 <>
-                  <div className="flex items-baseline gap-2">
-                    <p className="font-display text-3xl font-bold tabular-nums">
-                      {CURRENCY.format(kpis?.receita ?? 0)}
-                    </p>
-                    <KpiDelta current={kpis?.receita ?? 0} previous={receitaAnterior} />
+                  <p className="font-display text-3xl font-bold tabular-nums">
+                    {CURRENCY.format(kpis?.receita ?? 0)}
+                  </p>
+                  <div className="mt-1.5">
+                    <KpiDelta current={kpis?.receita ?? 0} previous={kpisAnterior?.receita ?? 0} />
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Meta prorrateada: {CURRENCY.format(kpis?.meta ?? 0)}
@@ -348,7 +366,13 @@ function UnitDashboardIndex() {
                       ))}
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-muted-foreground">
+                  <div className="mt-1.5">
+                    <KpiDelta
+                      current={kpis?.nota_media ?? 0}
+                      previous={kpisAnterior?.nota_media ?? 0}
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
                     Baseado em {kpis?.total_avaliacoes ?? 0} avaliações
                   </p>
                 </>
@@ -371,6 +395,13 @@ function UnitDashboardIndex() {
                   <p className="font-display text-3xl font-bold tabular-nums">
                     {tempoMedioPreparo != null ? `${tempoMedioPreparo.toFixed(0)} min` : "—"}
                   </p>
+                  <div className="mt-1.5">
+                    <KpiDelta
+                      current={tempoMedioPreparo ?? 0}
+                      previous={tempoMedioPreparoAnterior ?? 0}
+                      invert
+                    />
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">{periodLbl}</p>
                 </>
               )}
@@ -390,6 +421,9 @@ function UnitDashboardIndex() {
               ) : (
                 <>
                   <p className="font-display text-3xl font-bold tabular-nums">{cancelamentos}</p>
+                  <div className="mt-1.5">
+                    <KpiDelta current={cancelamentos} previous={cancelamentosAnterior} invert />
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">{periodLbl}</p>
                 </>
               )}
