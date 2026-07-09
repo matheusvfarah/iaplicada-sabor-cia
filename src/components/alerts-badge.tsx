@@ -76,18 +76,12 @@ export function AlertsBadge() {
   // (a lista de unidades já vem cacheada — ver use-unidades.ts.)
   // Toast só dispara com o sino aberto — gestor administra várias
   // unidades, toast a cada uma virando o dia inteiro seria spam.
-  const {
-    alertas: horarioAlertas,
-    naoLidos,
-    marcarTodosComoLidos,
-  } = useHorarioAlertas(isAdmin ? unidades : [], open);
+  const { naoLidos: horarioAlertas, marcarComoLido } = useHorarioAlertas(
+    isAdmin ? unidades : [],
+    open,
+  );
 
-  const naoResolvidos = alertas.length + naoLidos.length;
-
-  function handleOpenChange(next: boolean) {
-    setOpen(next);
-    if (next) marcarTodosComoLidos();
-  }
+  const naoResolvidos = alertas.length + horarioAlertas.length;
 
   async function handleResolver(id: number) {
     setAlertas((prev) => prev.filter((a) => a.id !== id));
@@ -95,7 +89,7 @@ export function AlertsBadge() {
   }
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="icon" className="relative size-9">
           <Bell className="size-4" />
@@ -137,6 +131,14 @@ export function AlertsBadge() {
                           ? `fecha em ${a.minutos} min`
                           : `abre em ${a.minutos} min`}
                       </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-1.5 h-6 px-2 text-[11px]"
+                        onClick={() => marcarComoLido(a.key)}
+                      >
+                        Marcar como lido
+                      </Button>
                     </div>
                   </div>
                 </div>

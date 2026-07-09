@@ -4,7 +4,6 @@ import {
   ClipboardList,
   UtensilsCrossed,
   Settings,
-  Bell,
   Globe,
   LogOut,
   ChevronLeft,
@@ -35,7 +34,6 @@ import { BrandLogo } from "@/components/brand-logo";
 import { signOut, useSession } from "@/lib/auth";
 import { useRecebidosCount } from "@/lib/use-recebidos-count";
 import { usePedidosHojeCount } from "@/lib/use-pedidos-hoje-count";
-import { useAlertasCount } from "@/lib/use-alertas-count";
 import { useUnidades } from "@/lib/use-unidades";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -120,7 +118,6 @@ export function AppSidebar() {
   const isActive = (path: string) => pathname === path;
   const recebidos = useRecebidosCount(inUnitMode ? activeUnitId : null);
   const pedidosHoje = usePedidosHojeCount(inUnitMode ? activeUnitId : null);
-  const alertasCount = useAlertasCount();
 
   function switchUnit(novoId: number) {
     const suffix = pathname.replace(/^\/unidade\/\d+/, "");
@@ -311,34 +308,6 @@ export function AppSidebar() {
                         {!collapsed && <span>Dashboard Geral</span>}
                       </Link>
                     </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem className="relative">
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive("/rede/alertas")}
-                      tooltip="Alertas"
-                      className={activeNavClasses(isActive("/rede/alertas"))}
-                    >
-                      <Link to="/rede/alertas">
-                        <Bell />
-                        {!collapsed && (
-                          <>
-                            <span className="flex-1">Alertas</span>
-                            {alertasCount > 0 && (
-                              <Badge
-                                variant="destructive"
-                                className="h-4 min-w-4 justify-center px-1 text-[10px]"
-                              >
-                                {alertasCount}
-                              </Badge>
-                            )}
-                          </>
-                        )}
-                      </Link>
-                    </SidebarMenuButton>
-                    {collapsed && alertasCount > 0 && (
-                      <span className="pointer-events-none absolute right-1 top-1 size-2 rounded-full bg-destructive" />
-                    )}
                   </SidebarMenuItem>
                   <SidebarMenuItem>
                     <SidebarMenuButton

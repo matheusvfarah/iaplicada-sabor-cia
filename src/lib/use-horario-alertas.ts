@@ -100,6 +100,14 @@ export function useHorarioAlertas(unidades: UnidadeParaAlerta[], toastEnabled = 
 
   const naoLidos = useMemo(() => alertas.filter((a) => !lidos.has(a.key)), [alertas, lidos]);
 
+  function marcarComoLido(key: string) {
+    setLidos((prev) => {
+      const next = new Set(prev).add(key);
+      writeSet(LIDOS_KEY, next);
+      return next;
+    });
+  }
+
   function marcarTodosComoLidos() {
     setLidos((prev) => {
       const next = new Set(prev);
@@ -109,5 +117,5 @@ export function useHorarioAlertas(unidades: UnidadeParaAlerta[], toastEnabled = 
     });
   }
 
-  return { alertas, naoLidos, marcarTodosComoLidos };
+  return { alertas, naoLidos, marcarComoLido, marcarTodosComoLidos };
 }
