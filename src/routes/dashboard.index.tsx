@@ -13,15 +13,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import {
-  ChevronDown,
-  Download,
-  FileText,
-  Flame,
-  Store,
-  TrendingDown,
-  Trophy,
-} from "lucide-react";
+import { ChevronDown, Download, FileText, Flame, Store, TrendingDown, Trophy } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
 import { AlertsBadge } from "@/components/alerts-badge";
 import { PeriodFilter } from "@/components/period-filter";
@@ -128,7 +120,9 @@ function GeneralDashboard() {
     return !!u && u.status === "ativa" && isUnidadeAberta(u);
   };
   const totalUnidades = unidadesStatus.length;
-  const unidadesAbertas = unidadesStatus.filter((u) => u.status === "ativa" && isUnidadeAberta(u)).length;
+  const unidadesAbertas = unidadesStatus.filter(
+    (u) => u.status === "ativa" && isUnidadeAberta(u),
+  ).length;
 
   useEffect(() => {
     if (period === "custom" && (!customRange.inicio || !customRange.fim)) return;
@@ -293,9 +287,7 @@ function GeneralDashboard() {
         {/* Filter row */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-[11px] text-muted-foreground">
-              Período
-            </p>
+            <p className="text-[11px] text-muted-foreground">Período</p>
             <p className="mt-1 font-display text-lg font-semibold">
               {period === "custom" ? periodLabel : `Últimos ${periodLabel.toLowerCase()}`}
             </p>
@@ -349,9 +341,7 @@ function GeneralDashboard() {
                 <CardContent className="p-5">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[11px] text-muted-foreground">
-                        Meta do Período
-                      </p>
+                      <p className="text-[11px] text-muted-foreground">Meta do Período</p>
                       <p className="mt-1 font-display text-3xl font-bold tabular-nums">
                         {gaugePct.toFixed(1)}%
                       </p>

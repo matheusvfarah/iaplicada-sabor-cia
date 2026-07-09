@@ -111,9 +111,7 @@ function ConfiguracoesPage() {
             ) : (
               <>
                 <div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Nome
-                  </p>
+                  <p className="text-[11px] text-muted-foreground">Nome</p>
                   <p className="mt-0.5 text-sm font-semibold">{detalhe.nome}</p>
                 </div>
                 <div className="flex items-start gap-2">

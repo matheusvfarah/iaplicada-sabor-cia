@@ -19,7 +19,11 @@ import { UnitContext } from "@/lib/unit-context";
 import { useSession } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { CURRENCY_FULL } from "@/lib/currency";
-import { minutosParaProximaVirada, useMinuteTick, type HorarioFuncionamento } from "@/lib/unidade-status";
+import {
+  minutosParaProximaVirada,
+  useMinuteTick,
+  type HorarioFuncionamento,
+} from "@/lib/unidade-status";
 
 type Plataforma = "ifood" | "rappi" | "proprio";
 
@@ -213,9 +217,7 @@ function UnitLayout() {
   if (!unit) {
     return (
       <div className="grid min-h-screen place-items-center bg-background">
-        <p className="text-xs text-muted-foreground">
-          Carregando unidade…
-        </p>
+        <p className="text-xs text-muted-foreground">Carregando unidade…</p>
       </div>
     );
   }

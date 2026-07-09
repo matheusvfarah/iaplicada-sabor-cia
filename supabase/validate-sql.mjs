@@ -208,7 +208,11 @@ try {
   bloqueouOutraColuna = true;
   await db.exec("reset role; reset app.uid;");
 }
-console.log("RLS gerente NÃO edita nome/status (só horário):", bloqueouOutraColuna, "(esperado true)");
+console.log(
+  "RLS gerente NÃO edita nome/status (só horário):",
+  bloqueouOutraColuna,
+  "(esperado true)",
+);
 
 if (ownUpdate.rows.length !== 1 || otherUpdate.rows.length !== 0 || !bloqueouOutraColuna) {
   console.error("FAIL RLS horário de funcionamento");

@@ -562,7 +562,9 @@ function PedidoCard({
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
           <p className="shrink-0 font-mono text-sm font-bold">{pedido.codigo ?? `#${pedido.id}`}</p>
-          <Badge className={cn("shrink-0 border-none text-[10px]", PLATFORM_BADGE[pedido.plataforma])}>
+          <Badge
+            className={cn("shrink-0 border-none text-[10px]", PLATFORM_BADGE[pedido.plataforma])}
+          >
             {PLATFORM_LABEL[pedido.plataforma]}
           </Badge>
         </div>

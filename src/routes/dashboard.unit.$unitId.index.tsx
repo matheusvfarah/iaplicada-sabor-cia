@@ -187,8 +187,7 @@ function UnitDashboardIndex() {
 
   const periodLbl = useMemo(() => computePeriodLabel(period, customRange), [period, customRange]);
 
-  const goalPctRaw =
-    kpis?.meta && kpis.meta > 0 ? ((kpis?.receita ?? 0) / kpis.meta) * 100 : 0;
+  const goalPctRaw = kpis?.meta && kpis.meta > 0 ? ((kpis?.receita ?? 0) / kpis.meta) * 100 : 0;
   const goalScaleMax = Math.max(100, goalPctRaw);
   const goalTrackPct = (Math.min(100, goalPctRaw) / goalScaleMax) * 100;
   const goalOverPct = goalPctRaw > 100 ? ((goalPctRaw - 100) / goalScaleMax) * 100 : 0;
@@ -308,7 +307,9 @@ function UnitDashboardIndex() {
                   </div>
                   <p
                     className={`mt-1 text-right text-[11px] tabular-nums ${
-                      goalPctRaw > 100 ? "text-accent-tint-foreground" : "text-success-tint-foreground"
+                      goalPctRaw > 100
+                        ? "text-accent-tint-foreground"
+                        : "text-success-tint-foreground"
                     }`}
                   >
                     {goalPctRaw.toFixed(1)}% da meta
@@ -451,7 +452,11 @@ function UnitDashboardIndex() {
                         stroke="var(--primary)"
                         strokeWidth={2}
                         fill="url(#receitaFill)"
-                        dot={(props: { cx?: number; cy?: number; payload?: { acimaMeta: boolean } }) => {
+                        dot={(props: {
+                          cx?: number;
+                          cy?: number;
+                          payload?: { acimaMeta: boolean };
+                        }) => {
                           const { cx, cy, payload } = props;
                           if (cx == null || cy == null) return <g key={`${cx}-${cy}`} />;
                           return (
@@ -529,7 +534,9 @@ function UnitDashboardIndex() {
             </CardHeader>
             <CardContent className="space-y-3">
               {loading ? (
-                Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)
+                Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))
               ) : top5.length === 0 ? (
                 <EmptyState hint="Nenhum pedido entregue nesse período." />
               ) : (
@@ -563,7 +570,9 @@ function UnitDashboardIndex() {
             </CardHeader>
             <CardContent className="space-y-3">
               {loading ? (
-                Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)
+                Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))
               ) : itensMaisVendidos.length === 0 ? (
                 <EmptyState hint="Sem dados nesse período." />
               ) : (

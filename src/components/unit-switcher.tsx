@@ -25,7 +25,12 @@ type Unidade = HorarioFuncionamento & {
 };
 
 const TABS = [
-  { to: "/dashboard/unit/$unitId" as const, label: "Dashboard", icon: LayoutDashboard, exact: true },
+  {
+    to: "/dashboard/unit/$unitId" as const,
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    exact: true,
+  },
   {
     to: "/dashboard/unit/$unitId/pedidos" as const,
     label: "Pedidos",
@@ -126,7 +131,9 @@ export function UnitSwitcher({ currentUnit }: { currentUnit: { id: number; nome:
             )}
             <div className="max-h-72 overflow-auto p-1">
               {filtered.length === 0 ? (
-                <p className="px-3 py-2 text-xs text-muted-foreground">Nenhuma unidade encontrada.</p>
+                <p className="px-3 py-2 text-xs text-muted-foreground">
+                  Nenhuma unidade encontrada.
+                </p>
               ) : (
                 filtered.map((u) => {
                   const aberta = abertaFor(u);

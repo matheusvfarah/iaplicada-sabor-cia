@@ -29,11 +29,7 @@ import { usePedidosHojeCount } from "@/lib/use-pedidos-hoje-count";
 import { useAlertasCount } from "@/lib/use-alertas-count";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  isUnidadeAberta,
-  useMinuteTick,
-  type HorarioFuncionamento,
-} from "@/lib/unidade-status";
+import { isUnidadeAberta, useMinuteTick, type HorarioFuncionamento } from "@/lib/unidade-status";
 
 const OPERACAO_ITEMS = [
   {
@@ -86,8 +82,7 @@ export function AppSidebar() {
   const { state, isMobile } = useSidebar();
   const collapsed = state === "collapsed" && !isMobile;
   const [unit, setUnit] = useState<
-    | (HorarioFuncionamento & { id: number; nome: string; status: "ativa" | "inativa" })
-    | null
+    (HorarioFuncionamento & { id: number; nome: string; status: "ativa" | "inativa" }) | null
   >(null);
 
   const isAdmin = session?.profile.role === "gestor_geral";
@@ -137,7 +132,10 @@ export function AppSidebar() {
         )}
 
         {!isAdmin && unit && collapsed && (
-          <div className="flex justify-center" title={`${unit.nome} · ${unitAberta ? "Aberta" : "Fechada"}`}>
+          <div
+            className="flex justify-center"
+            title={`${unit.nome} · ${unitAberta ? "Aberta" : "Fechada"}`}
+          >
             <span
               className={`size-2 rounded-full ${unitAberta ? "bg-success" : "bg-sidebar-foreground/30"}`}
             />
@@ -240,7 +238,9 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border">
-        <div className={collapsed ? "flex justify-center py-2" : "flex items-center gap-2 px-2 py-2"}>
+        <div
+          className={collapsed ? "flex justify-center py-2" : "flex items-center gap-2 px-2 py-2"}
+        >
           <div
             className="grid size-8 shrink-0 place-items-center rounded-md bg-sidebar-accent text-xs font-semibold text-sidebar-foreground"
             title={collapsed ? session?.profile.nome : undefined}
