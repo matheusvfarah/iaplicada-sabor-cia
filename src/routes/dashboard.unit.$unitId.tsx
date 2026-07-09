@@ -1,7 +1,8 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Download, FileText, Star, Target, Trophy } from "lucide-react";
+import { AlertTriangle, Download, FileText, Star, Target, Trophy } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
+import { AlertsBadge } from "@/components/alerts-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,13 +14,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/lib/supabase";
 import { CURRENCY, CURRENCY_FULL } from "@/lib/currency";
 import { exportCSV, exportPDF } from "@/lib/export";
 
 type Plataforma = "ifood" | "rappi" | "proprio";
-type StatusPedido = "recebido" | "preparando" | "entregue" | "cancelado";
+type StatusPedido = "pendente" | "recebido" | "preparando" | "entregue" | "cancelado";
 
 type Pedido = {
   id: number;
@@ -38,6 +48,20 @@ type KpiUnidade = {
   total_avaliacoes: number;
 };
 
+type Produto = {
+  id: number;
+  nome: string;
+  preco: number;
+  disponivel: boolean;
+};
+
+type PedidoItemDetalhe = {
+  id: number;
+  quantidade: number;
+  preco_unitario: number;
+  produto: { id: number; nome: string; disponivel: boolean } | null;
+};
+
 const PLATFORM_LABEL: Record<Plataforma, string> = {
   ifood: "iFood",
   rappi: "Rappi",
@@ -51,6 +75,10 @@ const platformDot: Record<Plataforma, string> = {
 };
 
 const statusBadge: Record<StatusPedido, { label: string; className: string }> = {
+  pendente: {
+    label: "Pendente",
+    className: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+  },
   recebido: {
     label: "Recebido",
     className: "bg-primary/10 text-primary border-primary/20",
@@ -122,6 +150,10 @@ function UnitDashboard() {
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<Pedido[]>([]);
   const [kpis, setKpis] = useState<KpiUnidade | null>(null);
+  const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [pendingQueue, setPendingQueue] = useState<Pedido[]>([]);
+  const [pendingItens, setPendingItens] = useState<PedidoItemDetalhe[]>([]);
+  const [resolvingPending, setResolvingPending] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -132,13 +164,27 @@ function UnitDashboard() {
         .from("pedidos")
         .select("id, unidade_id, valor, plataforma, status, data_pedido")
         .eq("unidade_id", unit.id)
+        .neq("status", "pendente")
         .gte("data_pedido", startOfToday())
         .order("data_pedido", { ascending: false }),
       supabase.rpc("rpc_kpis_unidade", { p_unidade: unit.id }),
-    ]).then(([ordersRes, kpisRes]) => {
+      supabase
+        .from("pedidos")
+        .select("id, unidade_id, valor, plataforma, status, data_pedido")
+        .eq("unidade_id", unit.id)
+        .eq("status", "pendente")
+        .order("data_pedido", { ascending: true }),
+      supabase
+        .from("produtos")
+        .select("id, nome, preco, disponivel")
+        .eq("unidade_id", unit.id)
+        .order("nome"),
+    ]).then(([ordersRes, kpisRes, pendingRes, produtosRes]) => {
       if (!active) return;
       setOrders(ordersRes.data ?? []);
       setKpis(kpisRes.data?.[0] ?? null);
+      setPendingQueue(pendingRes.data ?? []);
+      setProdutos(produtosRes.data ?? []);
       setLoading(false);
     });
 
@@ -149,6 +195,16 @@ function UnitDashboard() {
         { event: "*", schema: "public", table: "pedidos", filter: `unidade_id=eq.${unit.id}` },
         (payload) => {
           const row = payload.new as Pedido;
+
+          if (payload.eventType === "INSERT" && row.status === "pendente") {
+            setPendingQueue((prev) => [...prev, row]);
+            return;
+          }
+
+          setPendingQueue((prev) => prev.filter((p) => p.id !== row.id));
+
+          if (row.status === "pendente") return;
+
           setOrders((prev) => {
             const withoutRow = prev.filter((o) => o.id !== row.id);
             return [row, ...withoutRow].sort(
@@ -165,12 +221,56 @@ function UnitDashboard() {
     };
   }, [unit.id]);
 
+  const currentPending = pendingQueue[0] ?? null;
+
+  useEffect(() => {
+    if (!currentPending) {
+      setPendingItens([]);
+      return;
+    }
+    let active = true;
+    supabase
+      .from("pedido_itens")
+      .select("id, quantidade, preco_unitario, produto:produtos(id, nome, disponivel)")
+      .eq("pedido_id", currentPending.id)
+      .then(({ data }) => {
+        if (active) setPendingItens((data as unknown as PedidoItemDetalhe[]) ?? []);
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só o id importa, não a identidade do objeto
+  }, [currentPending?.id]);
+
   const top5 = useMemo(() => [...orders].sort((a, b) => b.valor - a.valor).slice(0, 5), [orders]);
 
   const goalPct =
     kpis?.meta_receita && kpis.meta_receita > 0
       ? Math.min(100, (kpis.receita_mes / kpis.meta_receita) * 100)
       : 0;
+
+  async function handleResolverPendente(novoStatus: "recebido" | "cancelado") {
+    if (!currentPending) return;
+    setResolvingPending(true);
+    const { error } = await supabase
+      .from("pedidos")
+      .update({ status: novoStatus })
+      .eq("id", currentPending.id);
+    setResolvingPending(false);
+    if (!error) {
+      setPendingQueue((prev) => prev.filter((p) => p.id !== currentPending.id));
+    }
+  }
+
+  async function handleToggleDisponibilidade(produtoId: number, disponivel: boolean) {
+    setProdutos((prev) => prev.map((p) => (p.id === produtoId ? { ...p, disponivel } : p)));
+    const { error } = await supabase.from("produtos").update({ disponivel }).eq("id", produtoId);
+    if (error) {
+      setProdutos((prev) =>
+        prev.map((p) => (p.id === produtoId ? { ...p, disponivel: !disponivel } : p)),
+      );
+    }
+  }
 
   const handleExportCSV = () => {
     exportCSV(
@@ -195,6 +295,77 @@ function UnitDashboard() {
 
   return (
     <>
+      <Dialog open={!!currentPending}>
+        <DialogContent
+          showCloseButton={false}
+          className="sm:max-w-md"
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Novo pedido recebido</DialogTitle>
+            <DialogDescription>
+              {currentPending && (
+                <>
+                  Pedido #{currentPending.id} · {PLATFORM_LABEL[currentPending.plataforma]} ·{" "}
+                  {CURRENCY_FULL.format(currentPending.valor)}
+                  {pendingQueue.length > 1 && ` · +${pendingQueue.length - 1} na fila`}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-64 space-y-2 overflow-auto">
+            {pendingItens.length === 0 ? (
+              <Skeleton className="h-16 w-full" />
+            ) : (
+              pendingItens.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between rounded-lg border border-border bg-surface p-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">
+                      {item.quantidade}× {item.produto?.nome ?? "Item"}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {CURRENCY_FULL.format(item.preco_unitario)} cada
+                    </p>
+                  </div>
+                  {item.produto && !item.produto.disponivel && (
+                    <Badge
+                      variant="outline"
+                      className="ml-2 shrink-0 gap-1 border-destructive/20 bg-destructive/10 text-[10px] text-destructive"
+                    >
+                      <AlertTriangle className="size-3" />
+                      Indisponível agora
+                    </Badge>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              disabled={resolvingPending}
+              onClick={() => handleResolverPendente("cancelado")}
+            >
+              Recusar
+            </Button>
+            <Button
+              className="flex-1"
+              disabled={resolvingPending}
+              onClick={() => handleResolverPendente("recebido")}
+            >
+              Aceitar pedido
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <TopBar
         title={unit.nome}
         subtitle="Operação em tempo real"
@@ -227,6 +398,7 @@ function UnitDashboard() {
             <span className="hidden font-mono text-[10px] uppercase tracking-widest text-muted-foreground sm:inline">
               Live
             </span>
+            <AlertsBadge />
           </>
         }
       />
@@ -436,6 +608,47 @@ function UnitDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Cardápio */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-display text-base">Disponibilidade do cardápio</CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Itens indisponíveis ficam sinalizados nos pedidos que chegarem
+            </p>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {produtos.map((produto) => (
+                  <div
+                    key={produto.id}
+                    className="flex items-center justify-between rounded-lg border border-border bg-surface p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{produto.nome}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {CURRENCY_FULL.format(produto.preco)}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={produto.disponivel}
+                      onCheckedChange={(checked) =>
+                        handleToggleDisponibilidade(produto.id, checked)
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </>
   );

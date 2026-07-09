@@ -21,8 +21,8 @@
 
 begin;
 
-truncate log_cancelamentos, alertas, avaliacoes, pedidos, metas,
-         funcionarios, unidades restart identity cascade;
+truncate pedido_itens, produtos, log_cancelamentos, alertas, avaliacoes, pedidos,
+         metas, funcionarios, unidades restart identity cascade;
 
 select setseed(0.42);
 
@@ -50,6 +50,25 @@ insert into funcionarios (nome, unidade_id, cargo, email) values
   ('Lucas Barbosa',    4, 'Cozinheiro','lucas.barbosa@saborecia.com.br'),
   ('Aline Cardoso',    4, 'Auxiliar',  'aline.cardoso@saborecia.com.br'),
   ('Marcos Vieira',    5, 'Gerente',   'marcos.vieira@saborecia.com.br');
+
+-- Cardápio (mesmo menu-base em cada unidade ativa) ---------------
+-- Alimenta o simulador de pedidos: cada pedido simulado sorteia
+-- itens deste catálogo, respeitando a disponibilidade.
+insert into produtos (unidade_id, nome, preco, disponivel)
+select u.id, p.nome, p.preco, true
+from unidades u
+cross join (values
+  ('Marmita Fit Frango',        24.90),
+  ('Marmita Fit Carne',         26.90),
+  ('Bowl Vegetariano',          22.50),
+  ('Combo Burger Artesanal',    32.90),
+  ('Yakisoba Tradicional',      28.00),
+  ('Salada Caesar com Frango',  21.90),
+  ('Refrigerante Lata',          6.50),
+  ('Suco Natural 300ml',         8.90),
+  ('Sobremesa Brownie',          9.90)
+) as p(nome, preco)
+where u.status = 'ativa';
 
 -- Metas (6 meses × 4 unidades ativas) ---------------------------
 insert into metas (unidade_id, mes_referencia, meta_receita, meta_pedidos)
@@ -170,6 +189,23 @@ where p.status = 'entregue'
   and p.data_pedido >= current_date
   and not exists (select 1 from avaliacoes a where a.pedido_id = p.id)
 limit 1;
+
+-- Recria profiles para usuários auth.users já existentes ---------
+-- truncate ... cascade em unidades também limpa `profiles` (FK).
+-- Isso reidrata os profiles a partir do user_metadata, igual o
+-- trigger handle_new_user faria num signup novo — mantém o seed
+-- idempotente sem derrubar os usuários de teste já criados.
+insert into profiles (id, nome, role, unidade_id)
+select
+  id,
+  coalesce(raw_user_meta_data ->> 'nome', email),
+  coalesce((raw_user_meta_data ->> 'role')::user_role, 'gerente'),
+  nullif(raw_user_meta_data ->> 'unidade_id', '')::bigint
+from auth.users
+on conflict (id) do update set
+  nome       = excluded.nome,
+  role       = excluded.role,
+  unidade_id = excluded.unidade_id;
 
 commit;
 

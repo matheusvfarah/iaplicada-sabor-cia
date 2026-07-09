@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import { Download, FileText, Flame, Store, TrendingDown, Trophy } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
+import { AlertsBadge } from "@/components/alerts-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -240,6 +241,7 @@ function GeneralDashboard() {
             <span className="hidden font-mono text-[10px] uppercase tracking-widest text-muted-foreground sm:inline">
               Live
             </span>
+            <AlertsBadge />
           </>
         }
       />
