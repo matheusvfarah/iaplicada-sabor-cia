@@ -10,6 +10,7 @@ import {
   ChevronDown,
   Store,
   Star,
+  Users,
 } from "lucide-react";
 import {
   Sidebar,
@@ -67,6 +68,12 @@ const UNIDADE_ITEMS = [
     to: "/unidade/$unidadeId/avaliacoes" as const,
     label: "Avaliações",
     icon: Star,
+    exact: false,
+  },
+  {
+    to: "/unidade/$unidadeId/funcionarios" as const,
+    label: "Funcionários",
+    icon: Users,
     exact: false,
   },
   {

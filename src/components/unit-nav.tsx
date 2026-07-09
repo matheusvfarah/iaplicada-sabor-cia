@@ -5,6 +5,7 @@ import {
   UtensilsCrossed,
   Settings,
   Star,
+  Users,
   MoreHorizontal,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +46,11 @@ const MAIS_ITEMS = [
     to: "/unidade/$unidadeId/avaliacoes" as const,
     label: "Avaliações",
     icon: Star,
+  },
+  {
+    to: "/unidade/$unidadeId/funcionarios" as const,
+    label: "Funcionários",
+    icon: Users,
   },
   {
     to: "/unidade/$unidadeId/configuracoes" as const,

@@ -152,6 +152,7 @@ await db.exec(`
   grant update (status) on unidades to test_gestor, test_gerente;
   grant update (tempo_limite_aceite_min, limite_atraso_min) on unidades to test_gestor, test_gerente;
   grant update (lida, lida_em) on notificacoes to test_gestor, test_gerente;
+  grant insert, update, delete on funcionarios to test_gestor, test_gerente;
   grant execute on all functions in schema public to test_gestor, test_gerente;
 `);
 
@@ -485,6 +486,108 @@ if (
   notifVaiFechar.length !== 2
 ) {
   console.error("FAIL gerar_notificacoes()");
+  process.exit(1);
+}
+
+// Funcionários: CRUD com RLS (gerente só na própria unidade) -----
+let gerenteCriaNaPropriaUnidade = false;
+let novoFuncionarioId = null;
+try {
+  await db.exec(`set role test_gerente; set app.uid = '00000000-0000-0000-0000-000000000002';`);
+  const r = await db.query(
+    `insert into funcionarios (nome, unidade_id, cargo, email)
+     values ('Teste RLS', 1, 'Atendente', 'teste.rls@saborecia.com.br')
+     returning id`,
+  );
+  gerenteCriaNaPropriaUnidade = r.rows.length === 1;
+  novoFuncionarioId = r.rows[0]?.id ?? null;
+  await db.exec("reset role; reset app.uid;");
+} catch (e) {
+  console.error("FAIL: gerente deveria poder criar funcionário na própria unidade ->", e.message);
+}
+console.log(
+  "Funcionários: gerente cria na própria unidade:",
+  gerenteCriaNaPropriaUnidade,
+  "(esperado true)",
+);
+
+let gerenteBloqueadoOutraUnidade = false;
+try {
+  await db.exec(`set role test_gerente; set app.uid = '00000000-0000-0000-0000-000000000002';`);
+  await db.query(
+    `insert into funcionarios (nome, unidade_id, cargo, email)
+     values ('Teste RLS 2', 2, 'Atendente', 'teste.rls2@saborecia.com.br')`,
+  );
+} catch {
+  gerenteBloqueadoOutraUnidade = true;
+} finally {
+  await db.exec("reset role; reset app.uid;");
+}
+console.log(
+  "Funcionários: gerente NÃO cria em outra unidade:",
+  gerenteBloqueadoOutraUnidade,
+  "(esperado true)",
+);
+
+let gerenteBloqueadoReatribuir = false;
+if (novoFuncionarioId) {
+  try {
+    await db.exec(`set role test_gerente; set app.uid = '00000000-0000-0000-0000-000000000002';`);
+    await db.query(`update funcionarios set unidade_id = 2 where id = ${novoFuncionarioId}`);
+  } catch {
+    gerenteBloqueadoReatribuir = true;
+  } finally {
+    await db.exec("reset role; reset app.uid;");
+  }
+}
+console.log(
+  "Funcionários: gerente NÃO reatribui funcionário pra outra unidade:",
+  gerenteBloqueadoReatribuir,
+  "(esperado true)",
+);
+
+let gerenteBloqueadoDeleteOutraUnidade = false;
+const [{ id: funcionarioOutraUnidade }] = (
+  await db.query(`select id from funcionarios where unidade_id = 2 limit 1`)
+).rows;
+try {
+  await db.exec(`set role test_gerente; set app.uid = '00000000-0000-0000-0000-000000000002';`);
+  const r = await db.query(
+    `delete from funcionarios where id = ${funcionarioOutraUnidade} returning id`,
+  );
+  gerenteBloqueadoDeleteOutraUnidade = r.rows.length === 0;
+} finally {
+  await db.exec("reset role; reset app.uid;");
+}
+console.log(
+  "Funcionários: gerente NÃO apaga funcionário de outra unidade:",
+  gerenteBloqueadoDeleteOutraUnidade,
+  "(esperado true)",
+);
+
+let emailDuplicadoBloqueado = false;
+try {
+  await db.query(
+    `insert into funcionarios (nome, unidade_id, cargo, email)
+     values ('Duplicado', 1, 'Atendente', 'teste.rls@saborecia.com.br')`,
+  );
+} catch {
+  emailDuplicadoBloqueado = true;
+}
+console.log(
+  "Funcionários: e-mail duplicado é rejeitado:",
+  emailDuplicadoBloqueado,
+  "(esperado true)",
+);
+
+if (
+  !gerenteCriaNaPropriaUnidade ||
+  !gerenteBloqueadoOutraUnidade ||
+  !gerenteBloqueadoReatribuir ||
+  !gerenteBloqueadoDeleteOutraUnidade ||
+  !emailDuplicadoBloqueado
+) {
+  console.error("FAIL RLS funcionarios");
   process.exit(1);
 }
 
