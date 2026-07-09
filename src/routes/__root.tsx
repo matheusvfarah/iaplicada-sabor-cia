@@ -7,12 +7,12 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
-import { applyTheme, getStoredTheme } from "@/lib/theme";
+import { applyTheme, getStoredTheme, onThemeChange, type Theme } from "@/lib/theme";
 
 function NotFoundComponent() {
   return (
@@ -135,16 +135,20 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
-    applyTheme(getStoredTheme());
+    const stored = getStoredTheme();
+    applyTheme(stored);
+    setTheme(stored);
+    return onThemeChange(setTheme);
   }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
-      <Toaster richColors position="top-right" />
+      <Toaster richColors position="top-right" theme={theme} />
     </QueryClientProvider>
   );
 }

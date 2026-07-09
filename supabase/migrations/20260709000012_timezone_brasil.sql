@@ -1,0 +1,16 @@
+-- ============================================================
+-- Sabor & Cia — 012 Timezone padrão America/Sao_Paulo
+--
+-- O banco estava em UTC enquanto o frontend calcula "hoje" no
+-- horário local do navegador (Brasil, UTC-3) — um desvio de até
+-- 3h no limite do dia. Toda data literal ("YYYY-MM-DD") que os
+-- RPCs recebem (p_inicio/p_fim) e todo current_date/now() passam
+-- a ser interpretados no fuso de Brasília, sem precisar tocar em
+-- nenhuma RPC individualmente: isso corrige de uma vez o kanban
+-- de Pedidos (coluna "hoje") e todos os filtros de período dos
+-- dois dashboards.
+--
+-- timestamptz já armazenados não mudam (são instantes absolutos);
+-- só a interpretação/exibição em fuso muda.
+-- ============================================================
+alter database postgres set timezone to 'America/Sao_Paulo';

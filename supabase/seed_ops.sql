@@ -25,19 +25,22 @@ join lateral (
 ) pr on true
 where p.data_pedido::date = current_date;
 
--- Backfill de preparando_em/entregue_em pros pedidos de hoje que já
--- nasceram 'preparando'/'entregue' no seed histórico (só pedidos
--- movidos pelo trigger novo ganham esses timestamps automaticamente).
--- Sem isso o kanban mostra "Finalizados" sem horário de entrega.
+-- Backfill de preparando_em/entregue_em pros últimos 7 dias, não só
+-- hoje — sem isso o RPC de tempo médio (rpc_tempo_medio_preparo)
+-- só tinha amostra de "hoje" pra qualquer p_dias, fazendo "7 dias"
+-- e "hoje" darem sempre o mesmo número (parecia não estar
+-- calculando de verdade). Cobre os pedidos que já nasceram
+-- 'preparando'/'entregue' no seed histórico — só as transições
+-- feitas pelo trigger novo ganham esses timestamps automaticamente.
 update pedidos
 set preparando_em = data_pedido + (5 + random() * 10 || ' minutes')::interval
-where data_pedido::date = current_date
+where data_pedido >= current_date - interval '7 days'
   and status in ('preparando', 'entregue')
   and preparando_em is null;
 
 update pedidos
 set entregue_em = preparando_em + (15 + random() * 20 || ' minutes')::interval
-where data_pedido::date = current_date
+where data_pedido >= current_date - interval '7 days'
   and status = 'entregue'
   and entregue_em is null;
 

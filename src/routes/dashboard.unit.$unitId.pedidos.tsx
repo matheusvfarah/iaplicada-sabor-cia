@@ -121,9 +121,14 @@ function PedidosKanban() {
         setLoading(false);
       });
 
-    supabase.rpc("rpc_tempo_medio_preparo", { p_unidade: unit.id, p_dias: 1 }).then(({ data }) => {
-      if (active) setTempoMedioHoje(data ?? null);
-    });
+    const fetchTempoMedio = () => {
+      supabase
+        .rpc("rpc_tempo_medio_preparo", { p_unidade: unit.id, p_dias: 1 })
+        .then(({ data }) => {
+          if (active) setTempoMedioHoje(data ?? null);
+        });
+    };
+    fetchTempoMedio();
 
     async function fetchItensFor(pedidoId: number) {
       const { data } = await supabase
@@ -145,6 +150,8 @@ function PedidosKanban() {
         { event: "*", schema: "public", table: "pedidos", filter: `unidade_id=eq.${unit.id}` },
         (payload) => {
           const row = payload.new as Omit<PedidoKanban, "itens" | "status"> & { status: string };
+
+          if (row.status === "entregue") fetchTempoMedio();
 
           if (row.status === "cancelado" || row.status === "pendente") {
             setOrders((prev) => prev.filter((o) => o.id !== row.id));
