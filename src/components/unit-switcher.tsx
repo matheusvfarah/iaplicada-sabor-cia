@@ -1,16 +1,23 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { ChevronDown, LayoutDashboard, ClipboardList, UtensilsCrossed, Settings } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ChevronDown,
+  LayoutDashboard,
+  ClipboardList,
+  UtensilsCrossed,
+  Settings,
+  Search,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
-type Unidade = { id: number; nome: string };
+type Unidade = { id: number; nome: string; status: "ativa" | "inativa" };
 
 const TABS = [
   { to: "/dashboard/unit/$unitId" as const, label: "Dashboard", icon: LayoutDashboard, exact: true },
@@ -42,41 +49,104 @@ export function UnitSwitcher({ currentUnit }: { currentUnit: { id: number; nome:
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const [unidades, setUnidades] = useState<Unidade[]>([]);
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     supabase
       .from("unidades")
-      .select("id, nome")
+      .select("id, nome, status")
       .order("nome")
-      .then(({ data }) => setUnidades(data ?? []));
+      .then(({ data }) => setUnidades((data as Unidade[]) ?? []));
   }, []);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return unidades;
+    const q = search.trim().toLowerCase();
+    return unidades.filter((u) => u.nome.toLowerCase().includes(q));
+  }, [unidades, search]);
+
+  const currentStatus = unidades.find((u) => u.id === currentUnit.id)?.status;
+
+  // Troca a unidade mas preserva a aba atual (ex.: em Pedidos de
+  // Pinheiros, trocar pra Moema deve cair em Pedidos de Moema).
+  function switchTo(unitId: number) {
+    const suffix = pathname.replace(`/dashboard/unit/${currentUnit.id}`, "");
+    navigate({ to: `/dashboard/unit/${unitId}${suffix}` });
+    setOpen(false);
+    setSearch("");
+  }
 
   return (
     <div className="border-b border-border bg-surface">
-      <div className="flex h-11 items-center gap-1.5 px-4 text-sm sm:px-6 lg:px-8">
+      <div className="flex h-14 items-center gap-3 px-4 text-sm sm:px-6 lg:px-8">
         <Link to="/dashboard" className="text-muted-foreground hover:text-foreground">
           Rede
         </Link>
         <span className="text-muted-foreground">/</span>
-        <DropdownMenu>
-          <DropdownMenuTrigger className="flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-foreground hover:bg-secondary">
-            {currentUnit.nome}
-            <ChevronDown className="size-3.5 text-muted-foreground" />
+        <DropdownMenu open={open} onOpenChange={setOpen}>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 font-medium text-foreground shadow-sm transition-colors hover:bg-secondary"
+              aria-label="Trocar de unidade"
+            >
+              <span
+                className={cn(
+                  "size-2 shrink-0 rounded-full",
+                  currentStatus === "ativa" ? "bg-success" : "bg-muted-foreground/40",
+                )}
+              />
+              {currentUnit.nome}
+              <ChevronDown className="size-3.5 text-muted-foreground" />
+            </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {unidades.map((u) => (
-              <DropdownMenuItem
-                key={u.id}
-                onClick={() =>
-                  navigate({
-                    to: "/dashboard/unit/$unitId",
-                    params: { unitId: String(u.id) },
-                  })
-                }
-              >
-                {u.nome}
-              </DropdownMenuItem>
-            ))}
+          <DropdownMenuContent align="start" className="w-64 p-0">
+            {unidades.length > 5 && (
+              <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+                <Search className="size-3.5 shrink-0 text-muted-foreground" />
+                <Input
+                  autoFocus
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar unidade…"
+                  className="h-7 border-none px-0 shadow-none focus-visible:ring-0"
+                />
+              </div>
+            )}
+            <div className="max-h-72 overflow-auto p-1">
+              {filtered.length === 0 ? (
+                <p className="px-3 py-2 text-xs text-muted-foreground">Nenhuma unidade encontrada.</p>
+              ) : (
+                filtered.map((u) => (
+                  <button
+                    key={u.id}
+                    onClick={() => switchTo(u.id)}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm hover:bg-secondary",
+                      u.id === currentUnit.id && "bg-secondary/60 font-medium",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "size-2 shrink-0 rounded-full",
+                        u.status === "ativa" ? "bg-success" : "bg-muted-foreground/40",
+                      )}
+                    />
+                    <span className="min-w-0 flex-1 truncate">{u.nome}</span>
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                        u.status === "ativa"
+                          ? "bg-success-tint text-success-tint-foreground"
+                          : "bg-secondary text-muted-foreground",
+                      )}
+                    >
+                      {u.status === "ativa" ? "Aberta" : "Fechada"}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
