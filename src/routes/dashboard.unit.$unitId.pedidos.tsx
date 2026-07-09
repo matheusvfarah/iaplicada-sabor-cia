@@ -102,18 +102,18 @@ function PedidosKanban() {
     let active = true;
     setLoading(true);
 
-    // Recebidos/Em produção: qualquer pedido ativo, não importa quando
-    // chegou. "Hoje" só se aplica aos finalizados — senão a coluna
-    // acumularia pedidos entregues de dias anteriores para sempre.
+    // Kanban é um painel operacional do dia — as 3 colunas ficam
+    // restritas a pedidos de hoje, senão pedidos antigos do seed
+    // histórico (ou de dias anteriores) ficam acumulados pra sempre
+    // como se fossem chegada nova.
     supabase
       .from("pedidos")
       .select(
         "id, codigo, valor, plataforma, status, data_pedido, preparando_em, entregue_em, itens:pedido_itens(quantidade, produto:produtos(nome))",
       )
       .eq("unidade_id", unit.id)
-      .or(
-        `status.in.(recebido,preparando),and(status.eq.entregue,data_pedido.gte.${startOfToday()})`,
-      )
+      .in("status", ["recebido", "preparando", "entregue"])
+      .gte("data_pedido", startOfToday())
       .order("data_pedido", { ascending: true })
       .then(({ data }) => {
         if (!active) return;
