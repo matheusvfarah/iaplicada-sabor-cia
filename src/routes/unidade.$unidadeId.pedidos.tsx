@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
 import { AlertsBadge } from "@/components/alerts-badge";
+import { NotificationsBell } from "@/components/notifications-bell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -172,8 +173,6 @@ function PedidosKanban() {
   const configUnidade = unidades?.find((u) => u.id === unit.id);
   const tempoLimiteAceite = configUnidade?.tempo_limite_aceite_min ?? TEMPO_LIMITE_ACEITE_PADRAO;
   const limiteAtraso = configUnidade?.limite_atraso_min ?? LIMITE_ATRASO_PADRAO;
-  const recusandoAutoRef = useRef<Set<number>>(new Set());
-  const atrasoAlertadoRef = useRef<Set<number>>(new Set());
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -300,38 +299,12 @@ function PedidosKanban() {
     }
   }
 
-  // Recusa automática: pedido "recebido" sem ação além do tempo limite
-  // configurado vira recusado sozinho, sem confirmação (é automático).
-  useEffect(() => {
-    for (const pedido of columns.recebido) {
-      if (recusandoAutoRef.current.has(pedido.id)) continue;
-      if (elapsedMinutes(pedido.data_pedido) < tempoLimiteAceite) continue;
-      recusandoAutoRef.current.add(pedido.id);
-      updateStatus(pedido, "cancelado");
-      toast.warning(`Pedido ${pedido.codigo ?? `#${pedido.id}`} recusado automaticamente`, {
-        description: `Passou de ${tempoLimiteAceite} min sem ser aceito.`,
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reavalia a cada tick de 1s (useTick) pra pegar o tempo decorrido, não só quando a coluna muda
-  }, [columns.recebido, tempoLimiteAceite, tick]);
-
-  // Alerta de atraso: pedido "em produção" que passou da meta de tempo
-  // de preparo configurada avisa uma vez (não repete a cada tick).
-  useEffect(() => {
-    const emProducaoIds = new Set(columns.preparando.map((p) => p.id));
-    for (const id of atrasoAlertadoRef.current) {
-      if (!emProducaoIds.has(id)) atrasoAlertadoRef.current.delete(id);
-    }
-    for (const pedido of columns.preparando) {
-      if (atrasoAlertadoRef.current.has(pedido.id)) continue;
-      if (!pedido.preparando_em) continue;
-      if (elapsedMinutes(pedido.preparando_em) < limiteAtraso) continue;
-      atrasoAlertadoRef.current.add(pedido.id);
-      toast.warning(`Pedido ${pedido.codigo ?? `#${pedido.id}`} atrasado`, {
-        description: `Preparo passou do limite de atraso de ${limiteAtraso} min.`,
-      });
-    }
-  }, [columns.preparando, limiteAtraso, tick]);
+  // Cancelamento automático (recebido além do tempo limite) e aviso de
+  // atraso (em produção além do limite) são gerados no banco por
+  // gerar_notificacoes() — ver notifications-bell.tsx. O kanban só
+  // reflete o resultado via realtime (canal de pedidos abaixo já
+  // remove da lista quando o status vira "cancelado") e mantém aqui só
+  // o destaque visual "urgente" do cronômetro, calculado no client.
 
   function handleConfirm() {
     if (!confirmAction) return;
@@ -444,6 +417,7 @@ function PedidosKanban() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <NotificationsBell unidadeIdAtual={unit.id} />
             <AlertsBadge />
           </>
         }

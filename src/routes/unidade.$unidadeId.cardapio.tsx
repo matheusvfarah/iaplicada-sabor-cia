@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
 import { AlertsBadge } from "@/components/alerts-badge";
+import { NotificationsBell } from "@/components/notifications-bell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -175,6 +176,7 @@ function CardapioPage() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <NotificationsBell unidadeIdAtual={unit.id} />
             <AlertsBadge />
           </>
         }

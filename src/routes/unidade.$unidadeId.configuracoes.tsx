@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { LogOut, MapPin, Calendar, CircleDot, Clock, Timer } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
 import { AlertsBadge } from "@/components/alerts-badge";
+import { NotificationsBell } from "@/components/notifications-bell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -153,7 +154,16 @@ function ConfiguracoesPage() {
 
   return (
     <>
-      <TopBar title="Configurações" subtitle={unit.nome} actions={<AlertsBadge />} />
+      <TopBar
+        title="Configurações"
+        subtitle={unit.nome}
+        actions={
+          <>
+            <NotificationsBell unidadeIdAtual={unit.id} />
+            <AlertsBadge />
+          </>
+        }
+      />
 
       <div className="mx-auto w-full max-w-2xl space-y-6 p-4 sm:p-6 lg:p-8">
         <Card>

@@ -38,6 +38,8 @@ import { useUnidades } from "@/lib/use-unidades";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { isUnidadeAberta, useMinuteTick } from "@/lib/unidade-status";
+import { useNotificacoesCtx } from "@/lib/notificacoes-context";
+import { TIPOS_OPERACIONAIS } from "@/lib/use-notificacoes";
 import { cn } from "@/lib/utils";
 
 const UNIDADE_ITEMS = [
@@ -109,6 +111,22 @@ export function AppSidebar() {
 
   const { data: unidades = [] } = useUnidades();
   useMinuteTick();
+  const { notificacoes } = useNotificacoesCtx();
+
+  // Badge por unidade na lista "Unidades" (só gestor, fora do modo
+  // unidade): conta as notificações operacionais (pedido novo/
+  // cancelado/atrasado) que NÃO aparecem no sino do gestor — ao entrar
+  // na unidade elas migram pro sino (NotificationsBell recebe
+  // unidadeIdAtual) e, marcadas como lida lá, esse contador zera
+  // sozinho (mesmo estado, via NotificacoesProvider).
+  const badgesPorUnidade = new Map<number, { total: number; urgente: boolean }>();
+  for (const n of notificacoes) {
+    if (!TIPOS_OPERACIONAIS.has(n.tipo)) continue;
+    const atual = badgesPorUnidade.get(n.unidade_id) ?? { total: 0, urgente: false };
+    atual.total += 1;
+    if (n.tipo === "pedido_atrasado" || n.tipo === "pedido_cancelado_auto") atual.urgente = true;
+    badgesPorUnidade.set(n.unidade_id, atual);
+  }
 
   const currentUnit = unidades.find((u) => u.id === activeUnitId) ?? null;
   const currentUnitInativa = currentUnit?.status === "inativa";
@@ -347,12 +365,25 @@ export function AppSidebar() {
                       );
                     }
                     const aberta = isUnidadeAberta(u);
+                    const badge = badgesPorUnidade.get(u.id);
                     return (
                       <SidebarMenuItem key={u.id} className="relative">
                         <SidebarMenuButton asChild tooltip={u.nome}>
                           <Link to="/unidade/$unidadeId" params={{ unidadeId: String(u.id) }}>
                             <Store />
                             {!collapsed && <span className="flex-1 truncate">{u.nome}</span>}
+                            {!collapsed && badge && (
+                              <span
+                                className={cn(
+                                  "grid h-4 min-w-4 shrink-0 place-items-center rounded-full px-1 text-[10px] font-semibold",
+                                  badge.urgente
+                                    ? "bg-danger-tint text-danger-tint-foreground"
+                                    : "bg-accent-tint text-accent-tint-foreground",
+                                )}
+                              >
+                                {badge.total > 9 ? "9+" : badge.total}
+                              </span>
+                            )}
                             {!collapsed && (
                               <span
                                 className={cn(
@@ -363,6 +394,14 @@ export function AppSidebar() {
                             )}
                           </Link>
                         </SidebarMenuButton>
+                        {collapsed && badge && (
+                          <span
+                            className={cn(
+                              "pointer-events-none absolute bottom-1 right-1 size-1.5 rounded-full",
+                              badge.urgente ? "bg-destructive" : "bg-accent-tint-foreground",
+                            )}
+                          />
+                        )}
                         {collapsed && (
                           <span
                             className={cn(

@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { useSession } from "@/lib/auth";
+import { NotificacoesProvider } from "@/lib/notificacoes-context";
 
 // Casca comum das rotas autenticadas (/rede/* e /unidade/*): guarda de
 // sessão + sidebar. A sidebar decide sozinha (pelo pathname) se mostra
@@ -27,11 +28,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background">
-        <AppSidebar />
-        <SidebarInset className="min-w-0 flex-1 bg-background">{children}</SidebarInset>
-      </div>
-    </SidebarProvider>
+    <NotificacoesProvider>
+      <SidebarProvider>
+        <div className="flex min-h-screen w-full bg-background">
+          <AppSidebar />
+          <SidebarInset className="min-w-0 flex-1 bg-background">{children}</SidebarInset>
+        </div>
+      </SidebarProvider>
+    </NotificacoesProvider>
   );
 }

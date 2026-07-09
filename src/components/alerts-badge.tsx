@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
-import { Bell, CheckCircle2, Clock, TrendingDown, Star } from "lucide-react";
+import { Bell, CheckCircle2, TrendingDown, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/lib/supabase";
-import { useHorarioAlertas } from "@/lib/use-horario-alertas";
-import { useUnidades } from "@/lib/use-unidades";
 
 type Alerta = {
   id: number;
@@ -31,7 +29,6 @@ export function AlertsBadge() {
   // RLS já limita: gerente só recebe a própria unidade nessa query,
   // gestor recebe todas — então o mesmo hook serve os dois papéis sem
   // distinção aqui.
-  const { data: unidades = [] } = useUnidades();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -71,15 +68,7 @@ export function AlertsBadge() {
     };
   }, []);
 
-  // Gerente já vê o banner + toast da própria unidade em qualquer
-  // subpágina dela, mas o alerta também precisa aparecer aqui no sino
-  // até ser marcado como lido — banner e sino são independentes.
-  // Toast do sino só dispara com ele aberto — gestor administra várias
-  // unidades, toast a cada uma virando o dia inteiro seria spam (pro
-  // gerente, com 1 unidade só, não faz diferença).
-  const { naoLidos: horarioAlertas, marcarComoLido } = useHorarioAlertas(unidades, open);
-
-  const naoResolvidos = alertas.length + horarioAlertas.length;
+  const naoResolvidos = alertas.length;
 
   async function handleResolver(id: number) {
     setAlertas((prev) => prev.filter((a) => a.id !== id));
@@ -106,41 +95,13 @@ export function AlertsBadge() {
           </p>
         </div>
         <div className="max-h-80 overflow-auto">
-          {alertas.length === 0 && horarioAlertas.length === 0 ? (
+          {alertas.length === 0 ? (
             <div className="flex flex-col items-center gap-2 p-8 text-center">
               <CheckCircle2 className="size-6 text-success" />
               <p className="text-xs text-muted-foreground">Tudo em dia por aqui.</p>
             </div>
           ) : (
             <>
-              {horarioAlertas.map((a) => (
-                <div key={a.key} className="border-b border-border p-3 last:border-b-0">
-                  <div className="flex items-start gap-2">
-                    <Clock className="mt-0.5 size-3.5 shrink-0 text-primary" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="h-4 px-1.5 text-[9px]">
-                          Horário
-                        </Badge>
-                      </div>
-                      <p className="mt-1 text-xs">
-                        {a.unidadeNome}{" "}
-                        {a.tipo === "fecha"
-                          ? `fecha em ${a.minutos} min`
-                          : `abre em ${a.minutos} min`}
-                      </p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="mt-1.5 h-6 px-2 text-[11px]"
-                        onClick={() => marcarComoLido(a.key)}
-                      >
-                        Marcar como lido
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
               {alertas.map((alerta) => {
                 const Icon = TIPO_ICON[alerta.tipo];
                 return (

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound, Outlet, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
@@ -19,7 +19,8 @@ import { UnitContext } from "@/lib/unit-context";
 import { useSession } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { CURRENCY_FULL } from "@/lib/currency";
-import { useHorarioAlertas } from "@/lib/use-horario-alertas";
+import { useNotificacoesCtx } from "@/lib/notificacoes-context";
+import { TIPOS_HORARIO } from "@/lib/use-notificacoes";
 import { useUnidades } from "@/lib/use-unidades";
 
 type Plataforma = "ifood" | "rappi" | "proprio";
@@ -125,15 +126,13 @@ function UnitLayout() {
     });
   }, [isGerenteForaDaUnidade, session, navigate]);
 
-  // Aviso 30 min antes de abrir/fechar: banner discreto + toast único
-  // por dia (hook único, ver item 1 — dedupe persistido em localStorage).
-  // `unidade` vem do cache compartilhado (useUnidades/TanStack Query) —
-  // depois de salvar o horário em Configurações, invalidar esse cache
-  // já propaga aqui, sem precisar de um fetch próprio que nunca se
-  // atualizava sozinho.
-  const unidadesParaAlerta = useMemo(() => (unidade ? [unidade] : []), [unidade]);
-  const { alertas: horarioAlertas } = useHorarioAlertas(unidadesParaAlerta, true);
-  const proximaVirada = horarioAlertas[0] ?? null;
+  // Aviso 30 min antes de abrir/fechar: banner discreto derivado da
+  // mesma notificação vai_abrir/vai_fechar que já chega pelo sino —
+  // nasce no banco (gerar_notificacoes()), o front só lê e exibe de
+  // dois jeitos (banner fixo + item no sino).
+  const { notificacoes } = useNotificacoesCtx();
+  const proximaVirada =
+    notificacoes.find((n) => TIPOS_HORARIO.has(n.tipo) && n.unidade_id === unidadeId) ?? null;
 
   // Fila de pedidos pendentes (chegada simulada) — global à área da
   // unidade, aparece em qualquer subpágina (Dashboard/Pedidos/Cardápio).
@@ -321,9 +320,7 @@ function UnitLayout() {
         {proximaVirada && (
           <div className="flex items-center justify-center gap-1.5 border-b border-border bg-accent-tint px-4 py-1.5 text-center text-xs font-medium text-accent-tint-foreground">
             <Clock className="size-3.5 shrink-0" />
-            {proximaVirada.tipo === "fecha"
-              ? `Fecha em ${proximaVirada.minutos} min`
-              : `Abre em ${proximaVirada.minutos} min`}
+            {proximaVirada.mensagem}
           </div>
         )}
         <UnitNav unidadeId={unit.id} />
