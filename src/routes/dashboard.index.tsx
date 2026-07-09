@@ -16,7 +16,7 @@ import {
 import { ChevronDown, Download, FileText, Flame, Store, TrendingDown, Trophy } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
 import { AlertsBadge } from "@/components/alerts-badge";
-import { PeriodFilter } from "@/components/period-filter";
+import { PeriodDropdown } from "@/components/period-dropdown";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -268,33 +268,7 @@ function GeneralDashboard() {
         subtitle={`${kpisUnidades.length} unidades ativas na rede`}
         actions={
           <>
-            <span
-              className={cn(
-                "hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium sm:inline-flex",
-                unidadesAbertas > 0
-                  ? "bg-success-tint text-success-tint-foreground"
-                  : "bg-secondary text-muted-foreground",
-              )}
-            >
-              {unidadesAbertas} de {totalUnidades} unidades abertas
-            </span>
-            <AlertsBadge />
-          </>
-        }
-      />
-
-      <div className="mx-auto w-full max-w-[1400px] space-y-6 p-4 sm:p-6 lg:p-8">
-        {/* Filter row */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[11px] text-muted-foreground">Período</p>
-            <p className="mt-1 font-display text-lg font-semibold">
-              {period === "custom" ? periodLabel : `Últimos ${periodLabel.toLowerCase()}`}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <PeriodFilter
+            <PeriodDropdown
               period={period}
               onPeriodChange={setPeriod}
               customRange={customRange}
@@ -324,9 +298,22 @@ function GeneralDashboard() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
-        </div>
+            <span
+              className={cn(
+                "hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium sm:inline-flex",
+                unidadesAbertas > 0
+                  ? "bg-success-tint text-success-tint-foreground"
+                  : "bg-secondary text-muted-foreground",
+              )}
+            >
+              {unidadesAbertas} de {totalUnidades} unidades abertas
+            </span>
+            <AlertsBadge />
+          </>
+        }
+      />
 
+      <div className="mx-auto w-full max-w-[1400px] space-y-6 p-4 sm:p-6 lg:p-8">
         {loading ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (

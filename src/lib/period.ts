@@ -1,4 +1,5 @@
 export const PERIODS = [
+  { id: "today", label: "Hoje" },
   { id: "7d", label: "7 dias" },
   { id: "30d", label: "30 dias" },
   { id: "6m", label: "6 meses" },
@@ -42,7 +43,9 @@ export function periodRange(period: PeriodId, custom: CustomRange) {
 
   const fim = new Date();
   let inicio: Date;
-  if (period === "7d") {
+  if (period === "today") {
+    inicio = new Date(fim);
+  } else if (period === "7d") {
     inicio = new Date(fim);
     inicio.setDate(inicio.getDate() - 6);
   } else if (period === "30d") {
