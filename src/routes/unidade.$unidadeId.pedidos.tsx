@@ -56,7 +56,7 @@ import { cn } from "@/lib/utils";
 import { playNotificationSound } from "@/lib/notification-sound";
 
 const TEMPO_LIMITE_ACEITE_PADRAO = 5;
-const META_TEMPO_PREPARO_PADRAO = 20;
+const LIMITE_ATRASO_PADRAO = 20;
 
 type Plataforma = "ifood" | "rappi" | "proprio";
 type StatusKanban = "recebido" | "preparando" | "entregue";
@@ -171,7 +171,7 @@ function PedidosKanban() {
   const { data: unidades } = useUnidades();
   const configUnidade = unidades?.find((u) => u.id === unit.id);
   const tempoLimiteAceite = configUnidade?.tempo_limite_aceite_min ?? TEMPO_LIMITE_ACEITE_PADRAO;
-  const metaTempoPreparo = configUnidade?.meta_tempo_preparo_min ?? META_TEMPO_PREPARO_PADRAO;
+  const limiteAtraso = configUnidade?.limite_atraso_min ?? LIMITE_ATRASO_PADRAO;
   const recusandoAutoRef = useRef<Set<number>>(new Set());
   const atrasoAlertadoRef = useRef<Set<number>>(new Set());
 
@@ -325,13 +325,13 @@ function PedidosKanban() {
     for (const pedido of columns.preparando) {
       if (atrasoAlertadoRef.current.has(pedido.id)) continue;
       if (!pedido.preparando_em) continue;
-      if (elapsedMinutes(pedido.preparando_em) < metaTempoPreparo) continue;
+      if (elapsedMinutes(pedido.preparando_em) < limiteAtraso) continue;
       atrasoAlertadoRef.current.add(pedido.id);
       toast.warning(`Pedido ${pedido.codigo ?? `#${pedido.id}`} atrasado`, {
-        description: `Preparo passou da meta de ${metaTempoPreparo} min.`,
+        description: `Preparo passou do limite de atraso de ${limiteAtraso} min.`,
       });
     }
-  }, [columns.preparando, metaTempoPreparo, tick]);
+  }, [columns.preparando, limiteAtraso, tick]);
 
   function handleConfirm() {
     if (!confirmAction) return;
@@ -506,7 +506,7 @@ function PedidosKanban() {
                   pedido={pedido}
                   draggable
                   reducedMotion={reducedMotion}
-                  metaTempoPreparo={metaTempoPreparo}
+                  limiteAtraso={limiteAtraso}
                   onFinalizar={() => updateStatus(pedido, "entregue")}
                   onCancelar={() => setConfirmAction({ pedido, tipo: "cancelar" })}
                 />
@@ -605,7 +605,7 @@ function PedidosKanban() {
                 <PedidoCard
                   key={pedido.id}
                   pedido={pedido}
-                  metaTempoPreparo={metaTempoPreparo}
+                  limiteAtraso={limiteAtraso}
                   onFinalizar={() => updateStatus(pedido, "entregue")}
                   onCancelar={() => setConfirmAction({ pedido, tipo: "cancelar" })}
                 />
@@ -735,7 +735,7 @@ function PedidoCard({
   overlay,
   reducedMotion,
   tempoLimiteAceite = TEMPO_LIMITE_ACEITE_PADRAO,
-  metaTempoPreparo = META_TEMPO_PREPARO_PADRAO,
+  limiteAtraso = LIMITE_ATRASO_PADRAO,
   onAceitar,
   onRecusar,
   onFinalizar,
@@ -747,7 +747,7 @@ function PedidoCard({
   overlay?: boolean;
   reducedMotion?: boolean;
   tempoLimiteAceite?: number;
-  metaTempoPreparo?: number;
+  limiteAtraso?: number;
   onAceitar?: () => void;
   onRecusar?: () => void;
   onFinalizar?: () => void;
@@ -764,7 +764,7 @@ function PedidoCard({
 
   const urgente =
     (isRecebido && (elapsed ?? 0) > tempoLimiteAceite) ||
-    (isPreparando && (elapsed ?? 0) > metaTempoPreparo);
+    (isPreparando && (elapsed ?? 0) > limiteAtraso);
   const resumo = itensResumo(pedido.itens);
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({

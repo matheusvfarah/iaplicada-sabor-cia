@@ -7,7 +7,7 @@ export type UnidadeResumo = HorarioFuncionamento & {
   nome: string;
   status: "ativa" | "inativa";
   tempo_limite_aceite_min: number;
-  meta_tempo_preparo_min: number;
+  limite_atraso_min: number;
 };
 
 // Lista de unidades é pedida por vários componentes ao mesmo tempo em
@@ -22,7 +22,7 @@ export function useUnidades() {
       const { data, error } = await supabase
         .from("unidades")
         .select(
-          "id, nome, status, horario_abertura, horario_fechamento, tempo_limite_aceite_min, meta_tempo_preparo_min",
+          "id, nome, status, horario_abertura, horario_fechamento, tempo_limite_aceite_min, limite_atraso_min",
         )
         .order("nome");
       if (error) throw error;

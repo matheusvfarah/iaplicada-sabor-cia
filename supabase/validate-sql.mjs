@@ -19,6 +19,8 @@ const stub = `
     language sql stable as $$ select nullif(current_setting('app.uid', true), '')::uuid $$;
   create role anon nologin;
   create role authenticated nologin;
+  grant usage on schema auth to anon, authenticated;
+  grant execute on function auth.uid() to anon, authenticated;
 `;
 
 async function run(label, sql) {
@@ -138,11 +140,14 @@ await db.exec(`
 await db.exec(`
   create role test_gestor login; grant usage on schema public to test_gestor;
   create role test_gerente login; grant usage on schema public to test_gerente;
+  grant usage on schema auth to test_gestor, test_gerente;
+  grant execute on function auth.uid() to test_gestor, test_gerente;
   grant select on all tables in schema public to test_gestor, test_gerente;
   grant update on alertas to test_gestor, test_gerente;
   grant update (horario_abertura, horario_fechamento) on unidades to test_gestor, test_gerente;
   grant update (status) on unidades to test_gestor, test_gerente;
-  grant update (tempo_limite_aceite_min, meta_tempo_preparo_min) on unidades to test_gestor, test_gerente;
+  grant update (tempo_limite_aceite_min, limite_atraso_min) on unidades to test_gestor, test_gerente;
+  grant update (lida, lida_em) on notificacoes to test_gestor, test_gerente;
   grant execute on all functions in schema public to test_gestor, test_gerente;
 `);
 
@@ -264,19 +269,77 @@ if (!gerenteBloqueadoStatus || !gestorMudaStatus) {
 // Config de pedidos (tempo limite de aceite / meta de preparo) -----
 await db.exec(`set role test_gerente; set app.uid = '00000000-0000-0000-0000-000000000002';`);
 const configUpdate = await db.query(
-  `update unidades set tempo_limite_aceite_min = 7, meta_tempo_preparo_min = 25 where id = 1 returning tempo_limite_aceite_min, meta_tempo_preparo_min`,
+  `update unidades set tempo_limite_aceite_min = 7, limite_atraso_min = 25 where id = 1 returning tempo_limite_aceite_min, limite_atraso_min`,
 );
 await db.exec("reset role; reset app.uid;");
 console.log(
   "RLS gerente edita config de pedidos da própria unidade:",
   configUpdate.rows.length === 1 &&
     configUpdate.rows[0].tempo_limite_aceite_min === 7 &&
-    configUpdate.rows[0].meta_tempo_preparo_min === 25,
+    configUpdate.rows[0].limite_atraso_min === 25,
   "(esperado true)",
 );
 
 if (configUpdate.rows.length !== 1) {
   console.error("FAIL config de pedidos");
+  process.exit(1);
+}
+
+// Notificações: RLS só enxerga/edita a própria -----------------
+await db.query(`
+  insert into notificacoes (profile_id, unidade_id, tipo, titulo, mensagem) values
+    ('00000000-0000-0000-0000-000000000001', 1, 'vai_fechar', 'Centro fecha em 20 min', 'msg'),
+    ('00000000-0000-0000-0000-000000000002', 1, 'pedido_novo', 'Pedido novo', 'msg');
+`);
+
+const gerenteNotificacoes = await asUser(
+  "test_gerente",
+  "00000000-0000-0000-0000-000000000002",
+  "select count(*)::int as n from notificacoes",
+);
+console.log(
+  "RLS gerente só vê a própria notificação:",
+  gerenteNotificacoes[0].n === 1,
+  "(esperado true)",
+);
+
+let gerenteBloqueadoOutraNotificacao = false;
+try {
+  await db.exec(`set role test_gerente; set app.uid = '00000000-0000-0000-0000-000000000002';`);
+  await db.query(`update notificacoes set lida = true where profile_id != auth.uid()`);
+  await db.exec("reset role; reset app.uid;");
+} catch {
+  gerenteBloqueadoOutraNotificacao = true;
+  await db.exec("reset role; reset app.uid;");
+}
+// RLS com using() simplesmente não afeta linhas de outro dono (0 rows),
+// não lança erro — o que importa é que nada mudou.
+const notificacaoDoGestorAindaNaoLida = await db.query(
+  `select lida from notificacoes where profile_id = '00000000-0000-0000-0000-000000000001'`,
+);
+console.log(
+  "RLS gerente NÃO marca notificação de outro como lida:",
+  notificacaoDoGestorAindaNaoLida.rows[0].lida === false,
+  "(esperado true)",
+);
+
+const gerenteMarcaPropriaLida = await asUser(
+  "test_gerente",
+  "00000000-0000-0000-0000-000000000002",
+  `update notificacoes set lida = true, lida_em = now() where profile_id = auth.uid() returning lida`,
+);
+console.log(
+  "RLS gerente marca a própria notificação como lida:",
+  gerenteMarcaPropriaLida[0]?.lida === true,
+  "(esperado true)",
+);
+
+if (
+  gerenteNotificacoes[0].n !== 1 ||
+  notificacaoDoGestorAindaNaoLida.rows[0].lida !== false ||
+  gerenteMarcaPropriaLida[0]?.lida !== true
+) {
+  console.error("FAIL RLS notificações");
   process.exit(1);
 }
 

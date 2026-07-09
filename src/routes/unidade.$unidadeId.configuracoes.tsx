@@ -24,7 +24,7 @@ type UnidadeDetalhe = {
   horario_abertura: string;
   horario_fechamento: string;
   tempo_limite_aceite_min: number;
-  meta_tempo_preparo_min: number;
+  limite_atraso_min: number;
 };
 
 export const Route = createFileRoute("/unidade/$unidadeId/configuracoes")({
@@ -44,7 +44,7 @@ function ConfiguracoesPage() {
   const [horarioFechamento, setHorarioFechamento] = useState("23:00");
   const [salvandoHorario, setSalvandoHorario] = useState(false);
   const [tempoLimiteAceite, setTempoLimiteAceite] = useState("5");
-  const [metaTempoPreparo, setMetaTempoPreparo] = useState("20");
+  const [limiteAtraso, setLimiteAtraso] = useState("20");
   const [salvandoConfigPedidos, setSalvandoConfigPedidos] = useState(false);
 
   useEffect(() => {
@@ -56,7 +56,7 @@ function ConfiguracoesPage() {
     supabase
       .from("unidades")
       .select(
-        "nome, endereco, status, data_abertura, horario_abertura, horario_fechamento, tempo_limite_aceite_min, meta_tempo_preparo_min",
+        "nome, endereco, status, data_abertura, horario_abertura, horario_fechamento, tempo_limite_aceite_min, limite_atraso_min",
       )
       .eq("id", unit.id)
       .single()
@@ -66,7 +66,7 @@ function ConfiguracoesPage() {
         setHorarioAbertura(data.horario_abertura.slice(0, 5));
         setHorarioFechamento(data.horario_fechamento.slice(0, 5));
         setTempoLimiteAceite(String(data.tempo_limite_aceite_min));
-        setMetaTempoPreparo(String(data.meta_tempo_preparo_min));
+        setLimiteAtraso(String(data.limite_atraso_min));
       });
     return () => {
       active = false;
@@ -95,13 +95,13 @@ function ConfiguracoesPage() {
 
   async function handleSalvarConfigPedidos() {
     const tempoLimite = Number(tempoLimiteAceite);
-    const metaPreparo = Number(metaTempoPreparo);
+    const limiteAtrasoMin = Number(limiteAtraso);
     if (!Number.isFinite(tempoLimite) || tempoLimite <= 0) {
       toast.error("Tempo limite pra aceitar precisa ser maior que zero");
       return;
     }
-    if (!Number.isFinite(metaPreparo) || metaPreparo <= 0) {
-      toast.error("Meta de tempo de preparo precisa ser maior que zero");
+    if (!Number.isFinite(limiteAtrasoMin) || limiteAtrasoMin < 5 || limiteAtrasoMin > 120) {
+      toast.error("Limite de atraso precisa estar entre 5 e 120 minutos");
       return;
     }
     setSalvandoConfigPedidos(true);
@@ -109,7 +109,7 @@ function ConfiguracoesPage() {
       .from("unidades")
       .update({
         tempo_limite_aceite_min: tempoLimite,
-        meta_tempo_preparo_min: metaPreparo,
+        limite_atraso_min: limiteAtrasoMin,
       })
       .eq("id", unit.id);
     setSalvandoConfigPedidos(false);
@@ -120,7 +120,7 @@ function ConfiguracoesPage() {
     toast.success("Configurações de pedidos atualizadas");
     setDetalhe((prev) =>
       prev
-        ? { ...prev, tempo_limite_aceite_min: tempoLimite, meta_tempo_preparo_min: metaPreparo }
+        ? { ...prev, tempo_limite_aceite_min: tempoLimite, limite_atraso_min: limiteAtrasoMin }
         : prev,
     );
     queryClient.invalidateQueries({ queryKey: ["unidades"] });
@@ -265,20 +265,19 @@ function ConfiguracoesPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">
-                      Meta de tempo de preparo (min)
-                    </Label>
+                    <Label className="text-xs text-muted-foreground">Limite de atraso (min)</Label>
                     <Input
                       type="number"
-                      min={1}
-                      value={metaTempoPreparo}
-                      onChange={(e) => setMetaTempoPreparo(e.target.value)}
+                      min={5}
+                      max={120}
+                      value={limiteAtraso}
+                      onChange={(e) => setLimiteAtraso(e.target.value)}
                     />
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Pedido recebido e não aceito dentro do prazo é recusado sozinho no kanban. Passar
-                  da meta de preparo dispara um alerta de atraso.
+                  do limite de atraso em produção dispara uma notificação (entre 5 e 120 min).
                 </p>
                 <Button
                   size="sm"
