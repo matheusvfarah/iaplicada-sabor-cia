@@ -14,7 +14,6 @@ import {
 } from "recharts";
 import { Ban, Clock, Download, FileText, Star, Target, Trophy, ChevronDown } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
-import { AlertsBadge } from "@/components/alerts-badge";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { PeriodDropdown } from "@/components/period-dropdown";
 import { Button } from "@/components/ui/button";
@@ -332,7 +331,6 @@ function UnitDashboardIndex() {
               </DropdownMenuContent>
             </DropdownMenu>
             <NotificationsBell unidadeIdAtual={unit.id} />
-            <AlertsBadge />
           </>
         }
       />

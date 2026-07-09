@@ -4,7 +4,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { LogOut, MapPin, Calendar, CircleDot, Clock, Timer } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
-import { AlertsBadge } from "@/components/alerts-badge";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -157,12 +156,7 @@ function ConfiguracoesPage() {
       <TopBar
         title="Configurações"
         subtitle={unit.nome}
-        actions={
-          <>
-            <NotificationsBell unidadeIdAtual={unit.id} />
-            <AlertsBadge />
-          </>
-        }
+        actions={<NotificationsBell unidadeIdAtual={unit.id} />}
       />
 
       <div className="mx-auto w-full max-w-2xl space-y-6 p-4 sm:p-6 lg:p-8">

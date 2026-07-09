@@ -4,7 +4,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { LogOut, Store } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
-import { AlertsBadge } from "@/components/alerts-badge";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -89,12 +88,7 @@ function RedeConfiguracoesPage() {
       <TopBar
         title="Configurações"
         subtitle="Preferências da conta"
-        actions={
-          <>
-            <NotificationsBell />
-            <AlertsBadge />
-          </>
-        }
+        actions={<NotificationsBell />}
       />
 
       <div className="mx-auto w-full max-w-2xl space-y-6 p-4 sm:p-6 lg:p-8">

@@ -27,7 +27,6 @@ import {
   FileText,
 } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
-import { AlertsBadge } from "@/components/alerts-badge";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -418,7 +417,6 @@ function PedidosKanban() {
               </DropdownMenuContent>
             </DropdownMenu>
             <NotificationsBell unidadeIdAtual={unit.id} />
-            <AlertsBadge />
           </>
         }
       />

@@ -13,7 +13,6 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
-import { AlertsBadge } from "@/components/alerts-badge";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -177,7 +176,6 @@ function CardapioPage() {
               </DropdownMenuContent>
             </DropdownMenu>
             <NotificationsBell unidadeIdAtual={unit.id} />
-            <AlertsBadge />
           </>
         }
       />

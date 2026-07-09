@@ -15,7 +15,6 @@ import {
 } from "recharts";
 import { ChevronDown, Download, FileText, Flame, Store, TrendingDown, Trophy } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
-import { AlertsBadge } from "@/components/alerts-badge";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { PeriodDropdown } from "@/components/period-dropdown";
 import { Button } from "@/components/ui/button";
@@ -340,7 +339,6 @@ function GeneralDashboard() {
               </DropdownMenuContent>
             </DropdownMenu>
             <NotificationsBell />
-            <AlertsBadge />
           </>
         }
       />
