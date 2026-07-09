@@ -13,7 +13,9 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UnitNav } from "@/components/unit-nav";
+import { UnitSwitcher } from "@/components/unit-switcher";
 import { UnitContext } from "@/lib/unit-context";
+import { useSession } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { CURRENCY_FULL } from "@/lib/currency";
 
@@ -76,6 +78,7 @@ export function UnidadeNaoEncontrada() {
 
 function UnitLayout() {
   const { unidadeId } = Route.useLoaderData();
+  const { session } = useSession();
   const [unit, setUnit] = useState<{ id: number; nome: string } | null>(null);
   const [unitNotFound, setUnitNotFound] = useState(false);
   const [pendingQueue, setPendingQueue] = useState<Pedido[]>([]);
@@ -257,6 +260,7 @@ function UnitLayout() {
         </DialogContent>
       </Dialog>
 
+      {session?.profile.role === "gestor_geral" && <UnitSwitcher currentUnit={unit} />}
       <UnitNav unitId={unit.id} />
       <div className="pb-16 sm:pb-0">
         <Outlet />

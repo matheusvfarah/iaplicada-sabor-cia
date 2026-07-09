@@ -2,12 +2,12 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
-  Store,
-  LogOut,
-  Circle,
   ClipboardList,
   UtensilsCrossed,
   Settings,
+  Bell,
+  Globe,
+  LogOut,
 } from "lucide-react";
 import {
   Sidebar,
@@ -15,27 +15,19 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 import { BrandLogo } from "@/components/brand-logo";
 import { supabase } from "@/lib/supabase";
 import { signOut, useSession } from "@/lib/auth";
 import { useRecebidosCount } from "@/lib/use-recebidos-count";
+import { usePedidosHojeCount } from "@/lib/use-pedidos-hoje-count";
+import { useAlertasCount } from "@/lib/use-alertas-count";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-
-type Unidade = {
-  id: number;
-  nome: string;
-  status: "ativa" | "inativa";
-};
 
 const OPERACAO_ITEMS = [
   {
@@ -49,6 +41,7 @@ const OPERACAO_ITEMS = [
     label: "Pedidos",
     icon: ClipboardList,
     exact: false,
+    showPendentes: true,
   },
   {
     to: "/dashboard/unit/$unitId/cardapio" as const,
@@ -64,126 +57,171 @@ const OPERACAO_ITEMS = [
   },
 ];
 
+function ItalyStripe() {
+  return (
+    <div className="flex h-1 w-full shrink-0">
+      <div className="flex-1 bg-success" />
+      <div className="flex-1 bg-white" />
+      <div className="flex-1 bg-destructive" />
+    </div>
+  );
+}
+
+function activeNavClasses(active: boolean) {
+  return active
+    ? "data-[active=true]:!bg-sidebar-primary data-[active=true]:!text-sidebar-primary-foreground data-[active=true]:font-semibold"
+    : "";
+}
+
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { session } = useSession();
   const navigate = useNavigate();
-  const [unidades, setUnidades] = useState<Unidade[]>([]);
+  const [unit, setUnit] = useState<{ id: number; nome: string; status: "ativa" | "inativa" } | null>(
+    null,
+  );
 
   const isAdmin = session?.profile.role === "gestor_geral";
+  const unidadeId = session?.profile.unidade_id ?? null;
 
   useEffect(() => {
-    if (!session) return;
+    if (isAdmin || unidadeId == null) return;
     supabase
       .from("unidades")
       .select("id, nome, status")
-      .order("nome")
-      .then(({ data }) => setUnidades(data ?? []));
-  }, [session]);
+      .eq("id", unidadeId)
+      .single()
+      .then(({ data }) => setUnit(data ?? null));
+  }, [isAdmin, unidadeId]);
 
   const isActive = (path: string) => pathname === path;
-  const unitMatch = pathname.match(/^\/dashboard\/unit\/(\d+)/);
-  const activeUnitId = unitMatch ? Number(unitMatch[1]) : null;
-  const recebidos = useRecebidosCount(activeUnitId);
+  const recebidos = useRecebidosCount(isAdmin ? null : unidadeId);
+  const pedidosHoje = usePedidosHojeCount(isAdmin ? null : unidadeId);
+  const alertasCount = useAlertasCount();
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border">
-        <div className="px-2 py-2">
-          <BrandLogo size="md" />
+    <Sidebar collapsible="icon" className="border-r-0">
+      <ItalyStripe />
+      <SidebarHeader className="gap-3 border-b border-sidebar-border pt-3">
+        <div className="px-2">
+          <BrandLogo size="md" variant="on-dark" />
         </div>
+
+        {!isAdmin && unit && (
+          <div className="mx-2 rounded-lg bg-sidebar-accent/60 px-3 py-2.5 group-data-[collapsible=icon]:hidden">
+            <p className="truncate text-xs font-semibold text-sidebar-foreground">{unit.nome}</p>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span
+                className={`size-1.5 rounded-full ${
+                  unit.status === "ativa" ? "bg-success" : "bg-sidebar-foreground/30"
+                }`}
+              />
+              <span className="text-[10px] text-sidebar-foreground/60">
+                {unit.status === "ativa" ? "Aberta" : "Fechada"} · {pedidosHoje} pedido
+                {pedidosHoje === 1 ? "" : "s"} hoje
+              </span>
+            </div>
+          </div>
+        )}
       </SidebarHeader>
+
       <SidebarContent>
-        {isAdmin && (
+        {isAdmin ? (
           <SidebarGroup>
-            <SidebarGroupLabel>Rede</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
                     isActive={isActive("/dashboard")}
-                    tooltip="Dashboard Geral"
+                    tooltip="Rede"
+                    className={activeNavClasses(isActive("/dashboard"))}
                   >
                     <Link to="/dashboard">
-                      <LayoutDashboard />
-                      <span>Dashboard Geral</span>
+                      <Globe />
+                      <span>Rede</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive("/dashboard/alertas")}
+                    tooltip="Alertas"
+                    className={activeNavClasses(isActive("/dashboard/alertas"))}
+                  >
+                    <Link to="/dashboard/alertas">
+                      <Bell />
+                      <span className="flex-1">Alertas</span>
+                      {alertasCount > 0 && (
+                        <Badge
+                          variant="destructive"
+                          className="h-4 min-w-4 justify-center px-1 text-[10px]"
+                        >
+                          {alertasCount}
+                        </Badge>
+                      )}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+        ) : (
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {OPERACAO_ITEMS.map((item) => {
+                  const Icon = item.icon;
+                  const resolved = item.to.replace("$unitId", String(unidadeId));
+                  const active = item.exact ? pathname === resolved : pathname.startsWith(resolved);
+                  return (
+                    <SidebarMenuItem key={item.to}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={active}
+                        tooltip={item.label}
+                        className={activeNavClasses(active)}
+                      >
+                        <Link to={item.to} params={{ unitId: String(unidadeId) }}>
+                          <Icon />
+                          <span className="flex-1">{item.label}</span>
+                          {item.showPendentes && recebidos > 0 && (
+                            <Badge
+                              variant="destructive"
+                              className="h-4 min-w-4 justify-center px-1 text-[10px]"
+                            >
+                              {recebidos}
+                            </Badge>
+                          )}
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
         )}
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Unidades</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {unidades.map((u) => {
-                const isCurrentUnit = u.id === activeUnitId;
-                return (
-                  <SidebarMenuItem key={u.id}>
-                    <SidebarMenuButton asChild isActive={isCurrentUnit} tooltip={u.nome}>
-                      <Link to="/dashboard/unit/$unitId" params={{ unitId: String(u.id) }}>
-                        <Store />
-                        <span className="truncate">{u.nome}</span>
-                        <Circle
-                          className={`ml-auto size-2 fill-current ${
-                            u.status === "ativa" ? "text-emerald-500" : "text-muted-foreground"
-                          }`}
-                        />
-                      </Link>
-                    </SidebarMenuButton>
-
-                    {isCurrentUnit && (
-                      <SidebarMenuSub>
-                        {OPERACAO_ITEMS.map((item) => {
-                          const Icon = item.icon;
-                          const resolved = item.to.replace("$unitId", String(u.id));
-                          const active = item.exact
-                            ? pathname === resolved
-                            : pathname.startsWith(resolved);
-                          return (
-                            <SidebarMenuSubItem key={item.to}>
-                              <SidebarMenuSubButton asChild isActive={active}>
-                                <Link to={item.to} params={{ unitId: String(u.id) }}>
-                                  <Icon />
-                                  <span className="flex-1">{item.label}</span>
-                                  {item.label === "Pedidos" && recebidos > 0 && (
-                                    <Badge className="h-4 min-w-4 justify-center px-1 text-[10px]">
-                                      {recebidos}
-                                    </Badge>
-                                  )}
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          );
-                        })}
-                      </SidebarMenuSub>
-                    )}
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
       </SidebarContent>
+
       <SidebarFooter className="border-t border-sidebar-border">
         <div className="flex items-center gap-2 px-2 py-2">
-          <div className="grid size-8 shrink-0 place-items-center rounded-md bg-sidebar-accent font-mono text-xs font-semibold">
+          <div className="grid size-8 shrink-0 place-items-center rounded-md bg-sidebar-accent text-xs font-semibold text-sidebar-foreground">
             {(session?.profile.nome ?? "??").slice(0, 2).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-            <p className="truncate text-xs font-semibold">{session?.profile.nome}</p>
-            <p className="truncate text-[10px] text-muted-foreground">
-              {isAdmin ? "Gestor de Rede" : "Operador de Unidade"}
+            <p className="truncate text-xs font-semibold text-sidebar-foreground">
+              {session?.profile.nome}
+            </p>
+            <p className="truncate text-[10px] text-sidebar-foreground/60">
+              {isAdmin ? "Gestor de Rede" : "Gerente de Unidade"}
             </p>
           </div>
           <Button
             variant="ghost"
             size="icon"
-            className="size-8 shrink-0 group-data-[collapsible=icon]:hidden"
+            className="size-8 shrink-0 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:hidden"
             onClick={async () => {
               await signOut();
               navigate({ to: "/login" });

@@ -1,29 +1,44 @@
-import { Flame } from "lucide-react";
+import logo from "@/assets/logo.png";
 
 export function BrandLogo({
   size = "md",
   showText = true,
+  variant = "on-light",
 }: {
   size?: "sm" | "md" | "lg";
   showText?: boolean;
+  variant?: "on-dark" | "on-light";
 }) {
   const dims = size === "lg" ? "size-12" : size === "sm" ? "size-7" : "size-9";
-  const iconSize = size === "lg" ? "size-6" : size === "sm" ? "size-3.5" : "size-4.5";
+  const imgPad = size === "lg" ? "p-2" : size === "sm" ? "p-1" : "p-1.5";
   const text = size === "lg" ? "text-2xl" : size === "sm" ? "text-sm" : "text-base";
+
   return (
     <div className="flex items-center gap-2.5">
       <div
-        className={`${dims} grid place-items-center rounded-lg bg-primary shadow-[0_0_24px_-6px_var(--primary)] shrink-0`}
+        className={`${dims} shrink-0 overflow-hidden rounded-[9px] ${
+          variant === "on-dark" ? `bg-accent ${imgPad}` : ""
+        }`}
       >
-        <Flame
-          className={`${iconSize} fill-primary-foreground text-primary-foreground`}
-          strokeWidth={2.2}
-        />
+        <img src={logo} alt="Sabor & Cia" className="size-full object-contain" />
       </div>
       {showText && (
-        <span className={`font-display font-bold tracking-tight ${text} text-foreground`}>
-          Sabor & Cia
-        </span>
+        <div className="leading-tight">
+          <span
+            className={`block font-display font-semibold tracking-tight ${text} ${
+              variant === "on-dark" ? "text-sidebar-foreground" : "text-foreground"
+            }`}
+          >
+            Sabor & Cia
+          </span>
+          <span
+            className={`block text-[10px] uppercase tracking-[0.16em] ${
+              variant === "on-dark" ? "text-sidebar-foreground/60" : "text-muted-foreground"
+            }`}
+          >
+            cucina italiana
+          </span>
+        </div>
       )}
     </div>
   );

@@ -13,6 +13,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
+import { Route as DashboardAlertasRouteImport } from './routes/dashboard.alertas'
 import { Route as DashboardUnitUnitIdRouteImport } from './routes/dashboard.unit.$unitId'
 import { Route as DashboardUnitUnitIdIndexRouteImport } from './routes/dashboard.unit.$unitId.index'
 import { Route as DashboardUnitUnitIdPedidosRouteImport } from './routes/dashboard.unit.$unitId.pedidos'
@@ -37,6 +38,11 @@ const IndexRoute = IndexRouteImport.update({
 const DashboardIndexRoute = DashboardIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardAlertasRoute = DashboardAlertasRouteImport.update({
+  id: '/alertas',
+  path: '/alertas',
   getParentRoute: () => DashboardRoute,
 } as any)
 const DashboardUnitUnitIdRoute = DashboardUnitUnitIdRouteImport.update({
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/login': typeof LoginRoute
+  '/dashboard/alertas': typeof DashboardAlertasRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/unit/$unitId': typeof DashboardUnitUnitIdRouteWithChildren
   '/dashboard/unit/$unitId/cardapio': typeof DashboardUnitUnitIdCardapioRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/dashboard/alertas': typeof DashboardAlertasRoute
   '/dashboard': typeof DashboardIndexRoute
   '/dashboard/unit/$unitId/cardapio': typeof DashboardUnitUnitIdCardapioRoute
   '/dashboard/unit/$unitId/configuracoes': typeof DashboardUnitUnitIdConfiguracoesRoute
@@ -94,6 +102,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/login': typeof LoginRoute
+  '/dashboard/alertas': typeof DashboardAlertasRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/unit/$unitId': typeof DashboardUnitUnitIdRouteWithChildren
   '/dashboard/unit/$unitId/cardapio': typeof DashboardUnitUnitIdCardapioRoute
@@ -107,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/login'
+    | '/dashboard/alertas'
     | '/dashboard/'
     | '/dashboard/unit/$unitId'
     | '/dashboard/unit/$unitId/cardapio'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/dashboard/alertas'
     | '/dashboard'
     | '/dashboard/unit/$unitId/cardapio'
     | '/dashboard/unit/$unitId/configuracoes'
@@ -127,6 +138,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/login'
+    | '/dashboard/alertas'
     | '/dashboard/'
     | '/dashboard/unit/$unitId'
     | '/dashboard/unit/$unitId/cardapio'
@@ -169,6 +181,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/dashboard/'
       preLoaderRoute: typeof DashboardIndexRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/alertas': {
+      id: '/dashboard/alertas'
+      path: '/alertas'
+      fullPath: '/dashboard/alertas'
+      preLoaderRoute: typeof DashboardAlertasRouteImport
       parentRoute: typeof DashboardRoute
     }
     '/dashboard/unit/$unitId': {
@@ -227,11 +246,13 @@ const DashboardUnitUnitIdRouteWithChildren =
   DashboardUnitUnitIdRoute._addFileChildren(DashboardUnitUnitIdRouteChildren)
 
 interface DashboardRouteChildren {
+  DashboardAlertasRoute: typeof DashboardAlertasRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
   DashboardUnitUnitIdRoute: typeof DashboardUnitUnitIdRouteWithChildren
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
+  DashboardAlertasRoute: DashboardAlertasRoute,
   DashboardIndexRoute: DashboardIndexRoute,
   DashboardUnitUnitIdRoute: DashboardUnitUnitIdRouteWithChildren,
 }
