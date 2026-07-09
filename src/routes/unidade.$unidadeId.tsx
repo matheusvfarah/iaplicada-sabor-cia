@@ -19,8 +19,8 @@ import { UnitContext } from "@/lib/unit-context";
 import { useSession } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { CURRENCY_FULL } from "@/lib/currency";
-import { type HorarioFuncionamento } from "@/lib/unidade-status";
 import { useHorarioAlertas } from "@/lib/use-horario-alertas";
+import { useUnidades } from "@/lib/use-unidades";
 
 type Plataforma = "ifood" | "rappi" | "proprio";
 
@@ -97,11 +97,10 @@ function UnitLayout() {
   const { unidadeId } = Route.useLoaderData();
   const { session, ready } = useSession();
   const navigate = useNavigate();
-  const [unit, setUnit] = useState<{ id: number; nome: string } | null>(null);
-  const [horario, setHorario] = useState<
-    (HorarioFuncionamento & { status: "ativa" | "inativa" }) | null
-  >(null);
-  const [unitNotFound, setUnitNotFound] = useState(false);
+  const { data: unidades, isLoading: unidadesLoading } = useUnidades();
+  const unidade = unidades?.find((u) => u.id === unidadeId) ?? null;
+  const unit = unidade ? { id: unidade.id, nome: unidade.nome } : null;
+  const unitNotFound = !unidadesLoading && !!unidades && !unidade;
   const [pendingQueue, setPendingQueue] = useState<Pedido[]>([]);
   const [pendingItens, setPendingItens] = useState<PedidoItemDetalhe[]>([]);
   const [resolvingPending, setResolvingPending] = useState(false);
@@ -126,38 +125,13 @@ function UnitLayout() {
     });
   }, [isGerenteForaDaUnidade, session, navigate]);
 
-  // Busca a unidade no client (não no loader — ver comentário na rota).
-  useEffect(() => {
-    let active = true;
-    supabase
-      .from("unidades")
-      .select("id, nome, status, horario_abertura, horario_fechamento")
-      .eq("id", unidadeId)
-      .single()
-      .then(({ data, error }) => {
-        if (!active) return;
-        if (error || !data) {
-          setUnitNotFound(true);
-          return;
-        }
-        setUnit({ id: data.id, nome: data.nome });
-        setHorario({
-          status: data.status,
-          horario_abertura: data.horario_abertura,
-          horario_fechamento: data.horario_fechamento,
-        });
-      });
-    return () => {
-      active = false;
-    };
-  }, [unidadeId]);
-
   // Aviso 30 min antes de abrir/fechar: banner discreto + toast único
   // por dia (hook único, ver item 1 — dedupe persistido em localStorage).
-  const unidadesParaAlerta = useMemo(
-    () => (unit && horario ? [{ ...horario, id: unit.id, nome: unit.nome }] : []),
-    [unit, horario],
-  );
+  // `unidade` vem do cache compartilhado (useUnidades/TanStack Query) —
+  // depois de salvar o horário em Configurações, invalidar esse cache
+  // já propaga aqui, sem precisar de um fetch próprio que nunca se
+  // atualizava sozinho.
+  const unidadesParaAlerta = useMemo(() => (unidade ? [unidade] : []), [unidade]);
   const { alertas: horarioAlertas } = useHorarioAlertas(unidadesParaAlerta, true);
   const proximaVirada = horarioAlertas[0] ?? null;
 
@@ -197,7 +171,8 @@ function UnitLayout() {
       active = false;
       supabase.removeChannel(channel);
     };
-  }, [unit]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só o id importa; `unit` é um objeto novo a cada render (derivado do cache de unidades)
+  }, [unit?.id]);
 
   const currentPending = pendingQueue[0] ?? null;
 

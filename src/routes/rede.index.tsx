@@ -392,7 +392,6 @@ function GeneralDashboard() {
                   <KpiDelta
                     current={cancelamentoRedeTaxa}
                     previous={cancelamentoRedeTaxaAnterior}
-                    invert
                   />
                 }
               />

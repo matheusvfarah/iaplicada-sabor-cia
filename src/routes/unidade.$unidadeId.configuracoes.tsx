@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { LogOut, MapPin, Calendar, CircleDot, Clock } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
@@ -32,6 +33,7 @@ export const Route = createFileRoute("/unidade/$unidadeId/configuracoes")({
 function ConfiguracoesPage() {
   const unit = useUnit();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [detalhe, setDetalhe] = useState<UnidadeDetalhe | null>(null);
   const [tema, setTema] = useState<Theme>("dark");
   const [somPedido, setSomPedido] = useState(true);
@@ -79,6 +81,7 @@ function ConfiguracoesPage() {
         ? { ...prev, horario_abertura: horarioAbertura, horario_fechamento: horarioFechamento }
         : prev,
     );
+    queryClient.invalidateQueries({ queryKey: ["unidades"] });
   }
 
   function handleToggleTema(escuro: boolean) {

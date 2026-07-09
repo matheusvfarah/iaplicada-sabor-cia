@@ -728,12 +728,14 @@ function PedidoCard({
       {...(draggable ? attributes : {})}
       {...(draggable ? listeners : {})}
       className={cn(
-        "rounded-[10px] border border-border bg-surface p-3",
+        "rounded-[10px] border border-border bg-surface p-3 transition-[box-shadow,border-color,background-color]",
         !reducedMotion && "animate-in fade-in slide-in-from-top-2 duration-300",
-        !reducedMotion && draggable && "transition-shadow",
         finalizado && "opacity-75",
         draggable && "touch-none",
         isDragging && "opacity-40",
+        !overlay &&
+          !isDragging &&
+          "hover:border-border-strong hover:bg-surface-hover hover:shadow-sm",
         overlay && !reducedMotion && "cursor-grabbing shadow-xl",
       )}
     >

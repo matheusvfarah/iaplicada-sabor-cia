@@ -447,7 +447,6 @@ function UnitDashboardIndex() {
                     <KpiDelta
                       current={tempoMedioPreparo ?? 0}
                       previous={tempoMedioPreparoAnterior ?? 0}
-                      invert
                     />
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">{periodLbl}</p>
@@ -470,7 +469,7 @@ function UnitDashboardIndex() {
                 <>
                   <p className="font-display text-3xl font-bold tabular-nums">{cancelamentos}</p>
                   <div className="mt-1.5">
-                    <KpiDelta current={cancelamentos} previous={cancelamentosAnterior} invert />
+                    <KpiDelta current={cancelamentos} previous={cancelamentosAnterior} />
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">{periodLbl}</p>
                 </>
