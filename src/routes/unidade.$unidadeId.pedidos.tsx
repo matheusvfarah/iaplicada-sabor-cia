@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -51,8 +51,12 @@ import { supabase } from "@/lib/supabase";
 import { CURRENCY_FULL } from "@/lib/currency";
 import { exportCsv, exportPdf, type ExportDataset } from "@/lib/export";
 import { useUnit } from "@/lib/unit-context";
+import { useUnidades } from "@/lib/use-unidades";
 import { cn } from "@/lib/utils";
 import { playNotificationSound } from "@/lib/notification-sound";
+
+const TEMPO_LIMITE_ACEITE_PADRAO = 5;
+const META_TEMPO_PREPARO_PADRAO = 20;
 
 type Plataforma = "ifood" | "rappi" | "proprio";
 type StatusKanban = "recebido" | "preparando" | "entregue";
@@ -152,7 +156,7 @@ function itensResumo(itens: ItemPedido[]) {
 
 function PedidosKanban() {
   const unit = useUnit();
-  useTick(1000);
+  const tick = useTick(1000);
   const reducedMotion = usePrefersReducedMotion();
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<PedidoKanban[]>([]);
@@ -163,6 +167,13 @@ function PedidosKanban() {
   } | null>(null);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [overColumn, setOverColumn] = useState<StatusKanban | null>(null);
+
+  const { data: unidades } = useUnidades();
+  const configUnidade = unidades?.find((u) => u.id === unit.id);
+  const tempoLimiteAceite = configUnidade?.tempo_limite_aceite_min ?? TEMPO_LIMITE_ACEITE_PADRAO;
+  const metaTempoPreparo = configUnidade?.meta_tempo_preparo_min ?? META_TEMPO_PREPARO_PADRAO;
+  const recusandoAutoRef = useRef<Set<number>>(new Set());
+  const atrasoAlertadoRef = useRef<Set<number>>(new Set());
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -288,6 +299,39 @@ function PedidosKanban() {
       toast.error("Não foi possível atualizar o pedido.", { description: error.message });
     }
   }
+
+  // Recusa automática: pedido "recebido" sem ação além do tempo limite
+  // configurado vira recusado sozinho, sem confirmação (é automático).
+  useEffect(() => {
+    for (const pedido of columns.recebido) {
+      if (recusandoAutoRef.current.has(pedido.id)) continue;
+      if (elapsedMinutes(pedido.data_pedido) < tempoLimiteAceite) continue;
+      recusandoAutoRef.current.add(pedido.id);
+      updateStatus(pedido, "cancelado");
+      toast.warning(`Pedido ${pedido.codigo ?? `#${pedido.id}`} recusado automaticamente`, {
+        description: `Passou de ${tempoLimiteAceite} min sem ser aceito.`,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reavalia a cada tick de 1s (useTick) pra pegar o tempo decorrido, não só quando a coluna muda
+  }, [columns.recebido, tempoLimiteAceite, tick]);
+
+  // Alerta de atraso: pedido "em produção" que passou da meta de tempo
+  // de preparo configurada avisa uma vez (não repete a cada tick).
+  useEffect(() => {
+    const emProducaoIds = new Set(columns.preparando.map((p) => p.id));
+    for (const id of atrasoAlertadoRef.current) {
+      if (!emProducaoIds.has(id)) atrasoAlertadoRef.current.delete(id);
+    }
+    for (const pedido of columns.preparando) {
+      if (atrasoAlertadoRef.current.has(pedido.id)) continue;
+      if (!pedido.preparando_em) continue;
+      if (elapsedMinutes(pedido.preparando_em) < metaTempoPreparo) continue;
+      atrasoAlertadoRef.current.add(pedido.id);
+      toast.warning(`Pedido ${pedido.codigo ?? `#${pedido.id}`} atrasado`, {
+        description: `Preparo passou da meta de ${metaTempoPreparo} min.`,
+      });
+    }
+  }, [columns.preparando, metaTempoPreparo, tick]);
 
   function handleConfirm() {
     if (!confirmAction) return;
@@ -435,6 +479,7 @@ function PedidosKanban() {
                   pedido={pedido}
                   draggable
                   reducedMotion={reducedMotion}
+                  tempoLimiteAceite={tempoLimiteAceite}
                   onAceitar={() => updateStatus(pedido, "preparando")}
                   onRecusar={() => setConfirmAction({ pedido, tipo: "recusar" })}
                 />
@@ -461,6 +506,7 @@ function PedidosKanban() {
                   pedido={pedido}
                   draggable
                   reducedMotion={reducedMotion}
+                  metaTempoPreparo={metaTempoPreparo}
                   onFinalizar={() => updateStatus(pedido, "entregue")}
                   onCancelar={() => setConfirmAction({ pedido, tipo: "cancelar" })}
                 />
@@ -536,6 +582,7 @@ function PedidosKanban() {
                 <PedidoCard
                   key={pedido.id}
                   pedido={pedido}
+                  tempoLimiteAceite={tempoLimiteAceite}
                   onAceitar={() => updateStatus(pedido, "preparando")}
                   onRecusar={() => setConfirmAction({ pedido, tipo: "recusar" })}
                 />
@@ -558,6 +605,7 @@ function PedidosKanban() {
                 <PedidoCard
                   key={pedido.id}
                   pedido={pedido}
+                  metaTempoPreparo={metaTempoPreparo}
                   onFinalizar={() => updateStatus(pedido, "entregue")}
                   onCancelar={() => setConfirmAction({ pedido, tipo: "cancelar" })}
                 />
@@ -686,6 +734,8 @@ function PedidoCard({
   draggable,
   overlay,
   reducedMotion,
+  tempoLimiteAceite = TEMPO_LIMITE_ACEITE_PADRAO,
+  metaTempoPreparo = META_TEMPO_PREPARO_PADRAO,
   onAceitar,
   onRecusar,
   onFinalizar,
@@ -696,6 +746,8 @@ function PedidoCard({
   draggable?: boolean;
   overlay?: boolean;
   reducedMotion?: boolean;
+  tempoLimiteAceite?: number;
+  metaTempoPreparo?: number;
   onAceitar?: () => void;
   onRecusar?: () => void;
   onFinalizar?: () => void;
@@ -710,7 +762,9 @@ function PedidoCard({
       ? elapsedMinutes(pedido.preparando_em)
       : null;
 
-  const urgente = (isRecebido && (elapsed ?? 0) > 5) || (isPreparando && (elapsed ?? 0) > 20);
+  const urgente =
+    (isRecebido && (elapsed ?? 0) > tempoLimiteAceite) ||
+    (isPreparando && (elapsed ?? 0) > metaTempoPreparo);
   const resumo = itensResumo(pedido.itens);
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({

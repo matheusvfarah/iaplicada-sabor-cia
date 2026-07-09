@@ -142,6 +142,7 @@ await db.exec(`
   grant update on alertas to test_gestor, test_gerente;
   grant update (horario_abertura, horario_fechamento) on unidades to test_gestor, test_gerente;
   grant update (status) on unidades to test_gestor, test_gerente;
+  grant update (tempo_limite_aceite_min, meta_tempo_preparo_min) on unidades to test_gestor, test_gerente;
   grant execute on all functions in schema public to test_gestor, test_gerente;
 `);
 
@@ -257,6 +258,25 @@ console.log("RLS gestor ativa/desativa unidade:", gestorMudaStatus, "(esperado t
 
 if (!gerenteBloqueadoStatus || !gestorMudaStatus) {
   console.error("FAIL RLS/trigger status da unidade");
+  process.exit(1);
+}
+
+// Config de pedidos (tempo limite de aceite / meta de preparo) -----
+await db.exec(`set role test_gerente; set app.uid = '00000000-0000-0000-0000-000000000002';`);
+const configUpdate = await db.query(
+  `update unidades set tempo_limite_aceite_min = 7, meta_tempo_preparo_min = 25 where id = 1 returning tempo_limite_aceite_min, meta_tempo_preparo_min`,
+);
+await db.exec("reset role; reset app.uid;");
+console.log(
+  "RLS gerente edita config de pedidos da própria unidade:",
+  configUpdate.rows.length === 1 &&
+    configUpdate.rows[0].tempo_limite_aceite_min === 7 &&
+    configUpdate.rows[0].meta_tempo_preparo_min === 25,
+  "(esperado true)",
+);
+
+if (configUpdate.rows.length !== 1) {
+  console.error("FAIL config de pedidos");
   process.exit(1);
 }
 

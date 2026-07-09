@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { LogOut, MapPin, Calendar, CircleDot, Clock } from "lucide-react";
+import { LogOut, MapPin, Calendar, CircleDot, Clock, Timer } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
 import { AlertsBadge } from "@/components/alerts-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +23,8 @@ type UnidadeDetalhe = {
   data_abertura: string;
   horario_abertura: string;
   horario_fechamento: string;
+  tempo_limite_aceite_min: number;
+  meta_tempo_preparo_min: number;
 };
 
 export const Route = createFileRoute("/unidade/$unidadeId/configuracoes")({
@@ -41,6 +43,9 @@ function ConfiguracoesPage() {
   const [horarioAbertura, setHorarioAbertura] = useState("11:00");
   const [horarioFechamento, setHorarioFechamento] = useState("23:00");
   const [salvandoHorario, setSalvandoHorario] = useState(false);
+  const [tempoLimiteAceite, setTempoLimiteAceite] = useState("5");
+  const [metaTempoPreparo, setMetaTempoPreparo] = useState("20");
+  const [salvandoConfigPedidos, setSalvandoConfigPedidos] = useState(false);
 
   useEffect(() => {
     setTema(getStoredTheme());
@@ -50,7 +55,9 @@ function ConfiguracoesPage() {
     let active = true;
     supabase
       .from("unidades")
-      .select("nome, endereco, status, data_abertura, horario_abertura, horario_fechamento")
+      .select(
+        "nome, endereco, status, data_abertura, horario_abertura, horario_fechamento, tempo_limite_aceite_min, meta_tempo_preparo_min",
+      )
       .eq("id", unit.id)
       .single()
       .then(({ data }) => {
@@ -58,6 +65,8 @@ function ConfiguracoesPage() {
         setDetalhe(data);
         setHorarioAbertura(data.horario_abertura.slice(0, 5));
         setHorarioFechamento(data.horario_fechamento.slice(0, 5));
+        setTempoLimiteAceite(String(data.tempo_limite_aceite_min));
+        setMetaTempoPreparo(String(data.meta_tempo_preparo_min));
       });
     return () => {
       active = false;
@@ -79,6 +88,39 @@ function ConfiguracoesPage() {
     setDetalhe((prev) =>
       prev
         ? { ...prev, horario_abertura: horarioAbertura, horario_fechamento: horarioFechamento }
+        : prev,
+    );
+    queryClient.invalidateQueries({ queryKey: ["unidades"] });
+  }
+
+  async function handleSalvarConfigPedidos() {
+    const tempoLimite = Number(tempoLimiteAceite);
+    const metaPreparo = Number(metaTempoPreparo);
+    if (!Number.isFinite(tempoLimite) || tempoLimite <= 0) {
+      toast.error("Tempo limite pra aceitar precisa ser maior que zero");
+      return;
+    }
+    if (!Number.isFinite(metaPreparo) || metaPreparo <= 0) {
+      toast.error("Meta de tempo de preparo precisa ser maior que zero");
+      return;
+    }
+    setSalvandoConfigPedidos(true);
+    const { error } = await supabase
+      .from("unidades")
+      .update({
+        tempo_limite_aceite_min: tempoLimite,
+        meta_tempo_preparo_min: metaPreparo,
+      })
+      .eq("id", unit.id);
+    setSalvandoConfigPedidos(false);
+    if (error) {
+      toast.error("Não foi possível salvar as configurações de pedidos");
+      return;
+    }
+    toast.success("Configurações de pedidos atualizadas");
+    setDetalhe((prev) =>
+      prev
+        ? { ...prev, tempo_limite_aceite_min: tempoLimite, meta_tempo_preparo_min: metaPreparo }
         : prev,
     );
     queryClient.invalidateQueries({ queryKey: ["unidades"] });
@@ -192,6 +234,59 @@ function ConfiguracoesPage() {
                   className="w-full sm:w-auto"
                 >
                   Salvar horário
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 font-display text-base">
+              <Timer className="size-4 text-primary" />
+              Pedidos
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!detalhe ? (
+              <Skeleton className="h-16 w-full" />
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">
+                      Recusar automaticamente após (min)
+                    </Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={tempoLimiteAceite}
+                      onChange={(e) => setTempoLimiteAceite(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">
+                      Meta de tempo de preparo (min)
+                    </Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={metaTempoPreparo}
+                      onChange={(e) => setMetaTempoPreparo(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Pedido recebido e não aceito dentro do prazo é recusado sozinho no kanban. Passar
+                  da meta de preparo dispara um alerta de atraso.
+                </p>
+                <Button
+                  size="sm"
+                  onClick={handleSalvarConfigPedidos}
+                  disabled={salvandoConfigPedidos}
+                  className="w-full sm:w-auto"
+                >
+                  Salvar configurações de pedidos
                 </Button>
               </>
             )}
