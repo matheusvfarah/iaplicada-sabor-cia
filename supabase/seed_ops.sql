@@ -1,18 +1,24 @@
 -- ============================================================
--- Sabor & Cia — Seed complementar (módulo operacional, Fase 1)
--- Roda depois de seed.sql. Gera pedido_itens para os pedidos de
--- hoje — demo do kanban de Pedidos e do RPC de itens mais vendidos.
--- Idempotente: limpa e regenera só os itens de pedidos de hoje.
+-- Sabor & Cia — Seed complementar (módulo operacional)
+-- Roda depois de seed.sql. Gera pedido_itens e faz o backfill de
+-- preparando_em/entregue_em pro histórico inteiro (não só hoje) —
+-- sem isso, "Tempo médio de preparo" e "Itens mais vendidos" no
+-- Dashboard da Unidade davam sempre o mesmo número em qualquer
+-- período (só "hoje" tinha amostra), mesmo already sendo
+-- filtrados por p_inicio/p_fim. Idempotente: limpa e regenera.
 -- ============================================================
 
 begin;
 
 delete from pedido_itens
-where pedido_id in (select id from pedidos where data_pedido::date = current_date);
+where pedido_id in (
+  select id from pedidos where data_pedido::date = current_date or status = 'entregue'
+);
 
--- Um item por pedido de hoje, sorteado do cardápio disponível da
--- própria unidade — suficiente pra demonstrar a lista de itens no
--- card do kanban sem precisar reconciliar com o valor histórico.
+-- Um item por pedido (hoje, em qualquer status, ou entregue em
+-- qualquer data), sorteado do cardápio disponível da própria
+-- unidade — suficiente pra demonstrar o kanban e alimentar itens
+-- mais vendidos em qualquer janela de período.
 insert into pedido_itens (pedido_id, produto_id, quantidade, preco_unitario)
 select p.id, pr.id, (1 + floor(random() * 2))::int, pr.preco
 from pedidos p
@@ -23,25 +29,20 @@ join lateral (
   order by random()
   limit 1
 ) pr on true
-where p.data_pedido::date = current_date;
+where p.data_pedido::date = current_date or p.status = 'entregue';
 
--- Backfill de preparando_em/entregue_em pros últimos 7 dias, não só
--- hoje — sem isso o RPC de tempo médio (rpc_tempo_medio_preparo)
--- só tinha amostra de "hoje" pra qualquer p_dias, fazendo "7 dias"
--- e "hoje" darem sempre o mesmo número (parecia não estar
--- calculando de verdade). Cobre os pedidos que já nasceram
--- 'preparando'/'entregue' no seed histórico — só as transições
--- feitas pelo trigger novo ganham esses timestamps automaticamente.
+-- Backfill de preparando_em/entregue_em pro histórico inteiro —
+-- só pedidos movidos pelo trigger novo ganham esses timestamps
+-- automaticamente; o resto do seed histórico nasceu direto com o
+-- status final e nunca passou pelas transições.
 update pedidos
 set preparando_em = data_pedido + (5 + random() * 10 || ' minutes')::interval
-where data_pedido >= current_date - interval '7 days'
-  and status in ('preparando', 'entregue')
+where status in ('preparando', 'entregue')
   and preparando_em is null;
 
 update pedidos
 set entregue_em = preparando_em + (15 + random() * 20 || ' minutes')::interval
-where data_pedido >= current_date - interval '7 days'
-  and status = 'entregue'
+where status = 'entregue'
   and entregue_em is null;
 
 commit;

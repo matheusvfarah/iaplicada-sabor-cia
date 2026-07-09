@@ -79,8 +79,8 @@ function UnitDashboardIndex() {
         .lt("data_pedido", `${p_fim}T23:59:59`)
         .order("valor", { ascending: false })
         .limit(5),
-      supabase.rpc("rpc_tempo_medio_preparo", { p_unidade: unit.id, p_dias: 7 }),
-      supabase.rpc("rpc_itens_mais_vendidos", { p_unidade: unit.id, p_limite: 5 }),
+      supabase.rpc("rpc_tempo_medio_preparo", { p_unidade: unit.id, p_inicio, p_fim }),
+      supabase.rpc("rpc_itens_mais_vendidos", { p_unidade: unit.id, p_inicio, p_fim, p_limite: 5 }),
     ]).then(([kpisRes, top5Res, tempoRes, itensRes]) => {
       if (!active) return;
       setKpis(kpisRes.data?.[0] ?? null);
@@ -250,7 +250,7 @@ function UnitDashboardIndex() {
                   <p className="font-display text-3xl font-bold">
                     {tempoMedioPreparo != null ? `${tempoMedioPreparo.toFixed(0)} min` : "—"}
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">Últimos 7 dias</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{periodLbl}</p>
                 </>
               )}
             </CardContent>

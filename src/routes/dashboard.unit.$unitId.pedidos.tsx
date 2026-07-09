@@ -122,8 +122,9 @@ function PedidosKanban() {
       });
 
     const fetchTempoMedio = () => {
+      const hoje = startOfToday().slice(0, 10);
       supabase
-        .rpc("rpc_tempo_medio_preparo", { p_unidade: unit.id, p_dias: 1 })
+        .rpc("rpc_tempo_medio_preparo", { p_unidade: unit.id, p_inicio: hoje, p_fim: hoje })
         .then(({ data }) => {
           if (active) setTempoMedioHoje(data ?? null);
         });

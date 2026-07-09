@@ -73,8 +73,14 @@ await q(
   "rpc_kpis_unidade_periodo(1)",
   "select * from rpc_kpis_unidade_periodo(1, current_date - 6, current_date)",
 );
-await q("rpc_tempo_medio_preparo(1)", "select rpc_tempo_medio_preparo(1, 7)");
-await q("rpc_itens_mais_vendidos(1)", "select * from rpc_itens_mais_vendidos(1, 5)");
+await q(
+  "rpc_tempo_medio_preparo(1)",
+  "select rpc_tempo_medio_preparo(1, current_date - 6, current_date)",
+);
+await q(
+  "rpc_itens_mais_vendidos(1)",
+  "select * from rpc_itens_mais_vendidos(1, current_date - 6, current_date, 5)",
+);
 await q(
   "avaliacoes ruins hoje",
   "select nota, comentario from avaliacoes where nota <= 2 and data >= current_date",
