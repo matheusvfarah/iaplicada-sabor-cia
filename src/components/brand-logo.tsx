@@ -15,11 +15,7 @@ export function BrandLogo({
 
   return (
     <div className="flex items-center gap-2.5">
-      <div
-        className={`${dims} shrink-0 overflow-hidden rounded-[9px] ${
-          variant === "on-dark" ? `bg-accent ${imgPad}` : ""
-        }`}
-      >
+      <div className={`${dims} ${imgPad} shrink-0 overflow-hidden rounded-[9px] bg-accent-tint`}>
         <img src={logo} alt="Sabor & Cia" className="size-full object-contain" />
       </div>
       {showText && (
