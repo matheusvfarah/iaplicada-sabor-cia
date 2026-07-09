@@ -19,6 +19,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { BrandLogo } from "@/components/brand-logo";
 import { supabase } from "@/lib/supabase";
@@ -77,6 +78,8 @@ export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { session } = useSession();
   const navigate = useNavigate();
+  const { state, isMobile } = useSidebar();
+  const collapsed = state === "collapsed" && !isMobile;
   const [unit, setUnit] = useState<{ id: number; nome: string; status: "ativa" | "inativa" } | null>(
     null,
   );
@@ -103,12 +106,12 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r-0">
       <ItalyStripe />
       <SidebarHeader className="gap-3 border-b border-sidebar-border pt-3">
-        <div className="px-2">
-          <BrandLogo size="md" variant="on-dark" />
+        <div className={collapsed ? "flex justify-center" : "px-2"}>
+          <BrandLogo size="md" variant="on-dark" showText={!collapsed} />
         </div>
 
-        {!isAdmin && unit && (
-          <div className="mx-2 rounded-lg bg-sidebar-accent/60 px-3 py-2.5 group-data-[collapsible=icon]:hidden">
+        {!isAdmin && unit && !collapsed && (
+          <div className="mx-2 rounded-lg bg-sidebar-accent/60 px-3 py-2.5">
             <p className="truncate text-xs font-semibold text-sidebar-foreground">{unit.nome}</p>
             <div className="mt-1 flex items-center gap-1.5">
               <span
@@ -121,6 +124,16 @@ export function AppSidebar() {
                 {pedidosHoje === 1 ? "" : "s"} hoje
               </span>
             </div>
+          </div>
+        )}
+
+        {!isAdmin && unit && collapsed && (
+          <div className="flex justify-center" title={`${unit.nome} · ${unit.status === "ativa" ? "Aberta" : "Fechada"}`}>
+            <span
+              className={`size-2 rounded-full ${
+                unit.status === "ativa" ? "bg-success" : "bg-sidebar-foreground/30"
+              }`}
+            />
           </div>
         )}
       </SidebarHeader>
@@ -139,11 +152,11 @@ export function AppSidebar() {
                   >
                     <Link to="/dashboard">
                       <Globe />
-                      <span>Rede</span>
+                      {!collapsed && <span>Rede</span>}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                <SidebarMenuItem>
+                <SidebarMenuItem className="relative">
                   <SidebarMenuButton
                     asChild
                     isActive={isActive("/dashboard/alertas")}
@@ -152,17 +165,24 @@ export function AppSidebar() {
                   >
                     <Link to="/dashboard/alertas">
                       <Bell />
-                      <span className="flex-1">Alertas</span>
-                      {alertasCount > 0 && (
-                        <Badge
-                          variant="destructive"
-                          className="h-4 min-w-4 justify-center px-1 text-[10px]"
-                        >
-                          {alertasCount}
-                        </Badge>
+                      {!collapsed && (
+                        <>
+                          <span className="flex-1">Alertas</span>
+                          {alertasCount > 0 && (
+                            <Badge
+                              variant="destructive"
+                              className="h-4 min-w-4 justify-center px-1 text-[10px]"
+                            >
+                              {alertasCount}
+                            </Badge>
+                          )}
+                        </>
                       )}
                     </Link>
                   </SidebarMenuButton>
+                  {collapsed && alertasCount > 0 && (
+                    <span className="pointer-events-none absolute right-1 top-1 size-2 rounded-full bg-destructive" />
+                  )}
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
@@ -176,7 +196,7 @@ export function AppSidebar() {
                   const resolved = item.to.replace("$unitId", String(unidadeId));
                   const active = item.exact ? pathname === resolved : pathname.startsWith(resolved);
                   return (
-                    <SidebarMenuItem key={item.to}>
+                    <SidebarMenuItem key={item.to} className="relative">
                       <SidebarMenuButton
                         asChild
                         isActive={active}
@@ -185,17 +205,24 @@ export function AppSidebar() {
                       >
                         <Link to={item.to} params={{ unitId: String(unidadeId) }}>
                           <Icon />
-                          <span className="flex-1">{item.label}</span>
-                          {item.showPendentes && recebidos > 0 && (
-                            <Badge
-                              variant="destructive"
-                              className="h-4 min-w-4 justify-center px-1 text-[10px]"
-                            >
-                              {recebidos}
-                            </Badge>
+                          {!collapsed && (
+                            <>
+                              <span className="flex-1">{item.label}</span>
+                              {item.showPendentes && recebidos > 0 && (
+                                <Badge
+                                  variant="destructive"
+                                  className="h-4 min-w-4 justify-center px-1 text-[10px]"
+                                >
+                                  {recebidos}
+                                </Badge>
+                              )}
+                            </>
                           )}
                         </Link>
                       </SidebarMenuButton>
+                      {collapsed && item.showPendentes && recebidos > 0 && (
+                        <span className="pointer-events-none absolute right-1 top-1 size-2 rounded-full bg-destructive" />
+                      )}
                     </SidebarMenuItem>
                   );
                 })}
@@ -206,30 +233,37 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border">
-        <div className="flex items-center gap-2 px-2 py-2">
-          <div className="grid size-8 shrink-0 place-items-center rounded-md bg-sidebar-accent text-xs font-semibold text-sidebar-foreground">
+        <div className={collapsed ? "flex justify-center py-2" : "flex items-center gap-2 px-2 py-2"}>
+          <div
+            className="grid size-8 shrink-0 place-items-center rounded-md bg-sidebar-accent text-xs font-semibold text-sidebar-foreground"
+            title={collapsed ? session?.profile.nome : undefined}
+          >
             {(session?.profile.nome ?? "??").slice(0, 2).toUpperCase()}
           </div>
-          <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-            <p className="truncate text-xs font-semibold text-sidebar-foreground">
-              {session?.profile.nome}
-            </p>
-            <p className="truncate text-[10px] text-sidebar-foreground/60">
-              {isAdmin ? "Gestor de Rede" : "Gerente de Unidade"}
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 shrink-0 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:hidden"
-            onClick={async () => {
-              await signOut();
-              navigate({ to: "/login" });
-            }}
-            aria-label="Sair"
-          >
-            <LogOut className="size-4" />
-          </Button>
+          {!collapsed && (
+            <>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold text-sidebar-foreground">
+                  {session?.profile.nome}
+                </p>
+                <p className="truncate text-[10px] text-sidebar-foreground/60">
+                  {isAdmin ? "Gestor de Rede" : "Gerente de Unidade"}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 shrink-0 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                onClick={async () => {
+                  await signOut();
+                  navigate({ to: "/login" });
+                }}
+                aria-label="Sair"
+              >
+                <LogOut className="size-4" />
+              </Button>
+            </>
+          )}
         </div>
       </SidebarFooter>
     </Sidebar>
