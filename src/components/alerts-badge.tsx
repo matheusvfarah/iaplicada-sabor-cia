@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/lib/supabase";
-import { useSession } from "@/lib/auth";
 import { useHorarioAlertas } from "@/lib/use-horario-alertas";
 import { useUnidades } from "@/lib/use-unidades";
 
@@ -28,9 +27,10 @@ const TIPO_LABEL = {
 };
 
 export function AlertsBadge() {
-  const { session } = useSession();
-  const isAdmin = session?.profile.role === "gestor_geral";
   const [alertas, setAlertas] = useState<Alerta[]>([]);
+  // RLS já limita: gerente só recebe a própria unidade nessa query,
+  // gestor recebe todas — então o mesmo hook serve os dois papéis sem
+  // distinção aqui.
   const { data: unidades = [] } = useUnidades();
   const [open, setOpen] = useState(false);
 
@@ -71,15 +71,13 @@ export function AlertsBadge() {
     };
   }, []);
 
-  // Horário só interessa ao gestor de rede aqui — o gerente já vê o
-  // banner + toast da própria unidade em qualquer subpágina dela.
-  // (a lista de unidades já vem cacheada — ver use-unidades.ts.)
-  // Toast só dispara com o sino aberto — gestor administra várias
-  // unidades, toast a cada uma virando o dia inteiro seria spam.
-  const { naoLidos: horarioAlertas, marcarComoLido } = useHorarioAlertas(
-    isAdmin ? unidades : [],
-    open,
-  );
+  // Gerente já vê o banner + toast da própria unidade em qualquer
+  // subpágina dela, mas o alerta também precisa aparecer aqui no sino
+  // até ser marcado como lido — banner e sino são independentes.
+  // Toast do sino só dispara com ele aberto — gestor administra várias
+  // unidades, toast a cada uma virando o dia inteiro seria spam (pro
+  // gerente, com 1 unidade só, não faz diferença).
+  const { naoLidos: horarioAlertas, marcarComoLido } = useHorarioAlertas(unidades, open);
 
   const naoResolvidos = alertas.length + horarioAlertas.length;
 
