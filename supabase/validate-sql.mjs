@@ -381,6 +381,41 @@ if (
   process.exit(1);
 }
 
+// Aceite do popup vai direto pra produção (026): pendente -> preparando
+const [{ id: pedidoPendenteTeste }] = (
+  await db.query(
+    `insert into pedidos (unidade_id, valor, plataforma, status) values (1, 30.00, 'ifood', 'pendente') returning id`,
+  )
+).rows;
+await db.query(`update pedidos set status = 'preparando' where id = ${pedidoPendenteTeste}`);
+const [{ status: statusAposAceite, preparando_em: preparandoEmAposAceite }] = (
+  await db.query(`select status, preparando_em from pedidos where id = ${pedidoPendenteTeste}`)
+).rows;
+console.log(
+  "Aceite do popup (pendente -> preparando) permitido e seta preparando_em:",
+  statusAposAceite === "preparando" && !!preparandoEmAposAceite,
+  "(esperado true)",
+);
+if (statusAposAceite !== "preparando" || !preparandoEmAposAceite) {
+  console.error("FAIL trigger: pendente -> preparando deveria ser permitido");
+  process.exit(1);
+}
+
+const notifPedidoNovoAceite = (
+  await db.query(
+    `select id from notificacoes where ref_pedido_id = ${pedidoPendenteTeste} and tipo = 'pedido_novo'`,
+  )
+).rows;
+console.log(
+  "Pedido novo notifica gerente ao chegar em preparando (não mais em recebido):",
+  notifPedidoNovoAceite.length === 1,
+  "(esperado true)",
+);
+if (notifPedidoNovoAceite.length !== 1) {
+  console.error("FAIL notificar_pedido_novo() deveria disparar em preparando");
+  process.exit(1);
+}
+
 // gerar_notificacoes(): auto-cancel ------------------------------
 // unidade 1 tem gerente (profile 2) + gestor (profile 1) nos fixtures
 // de teste — dá pra conferir os dois destinatários de uma vez.

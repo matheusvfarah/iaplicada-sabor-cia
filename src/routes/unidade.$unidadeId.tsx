@@ -205,7 +205,10 @@ function UnitLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- só o id importa, não a identidade do objeto
   }, [currentPending?.id]);
 
-  async function handleResolverPendente(novoStatus: "recebido" | "cancelado") {
+  // Aceitar já manda direto pra produção (preparando) — pedidos só
+  // chegam via API agora, então não faz sentido um segundo clique de
+  // "Aceitar" lá no kanban só pra sair de "Recebidos".
+  async function handleResolverPendente(novoStatus: "preparando" | "cancelado") {
     if (!currentPending) return;
     setResolvingPending(true);
     const { error } = await supabase
@@ -320,7 +323,7 @@ function UnitLayout() {
               <Button
                 className="flex-1"
                 disabled={resolvingPending}
-                onClick={() => handleResolverPendente("recebido")}
+                onClick={() => handleResolverPendente("preparando")}
               >
                 Aceitar pedido
               </Button>

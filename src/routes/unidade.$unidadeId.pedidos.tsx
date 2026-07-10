@@ -242,7 +242,11 @@ function PedidosKanban() {
           setOrders((prev) => {
             const idx = prev.findIndex((o) => o.id === row.id);
             if (idx === -1) {
-              if (row.status === "recebido") playNotificationSound();
+              // Pedidos só chegam via API agora, e o aceite do popup já
+              // manda direto pra "preparando" — é o status que marca a
+              // entrada de verdade no kanban (não existe mais chegada
+              // fresca em "recebido").
+              if (row.status === "recebido" || row.status === "preparando") playNotificationSound();
               fetchItensFor(row.id);
               return [...prev, { ...row, itens: [] } as PedidoKanban];
             }
