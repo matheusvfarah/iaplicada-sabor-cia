@@ -19,7 +19,7 @@
 | Backend   | Supabase (Auth, Postgres, RLS, Realtime) | Auth pronto, RLS nativo, realtime sem infra extra                |
 | Automação | n8n Cloud                                | Workflows visuais, exportáveis e auditáveis                      |
 | Deploy    | Vercel                                   | CI a partir do GitHub                                            |
-| IA        | Claude (Cowork + Code)                   | Modelagem, geração de SQL/seed e diagnóstico nos alertas         |
+| IA        | Claude (Cowork + Code)                   | Modelagem, geração de SQL/seed e código do projeto               |
 
 ## Estrutura
 
