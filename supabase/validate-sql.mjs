@@ -895,6 +895,18 @@ if (avaliacaoGerada) {
     "(esperado true, nota =",
     avaliacaoGerada.nota + ")",
   );
+
+  const notifAvaliacaoRuim = (
+    await db.query(
+      `select profile_id from notificacoes where ref_pedido_id = ${pedidoEntregueVelho} and tipo = 'avaliacao_ruim'`,
+    )
+  ).rows;
+  console.log(
+    "Simular avaliações: nota <= 2 notifica gerente + gestor (push), nota boa não notifica:",
+    notaRuim ? notifAvaliacaoRuim.length === 2 : notifAvaliacaoRuim.length === 0,
+    "(esperado true, nota =",
+    avaliacaoGerada.nota + ")",
+  );
 } else {
   console.log(
     "Simular avaliações: pedido não saiu sorteado nesta execução (~80% de chance, ok)",

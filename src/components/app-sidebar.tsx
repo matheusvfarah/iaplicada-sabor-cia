@@ -138,7 +138,8 @@ export function AppSidebar() {
     if (!TIPOS_OPERACIONAIS.has(n.tipo)) continue;
     const atual = badgesPorUnidade.get(n.unidade_id) ?? { total: 0, urgente: false };
     atual.total += 1;
-    if (n.tipo === "pedido_atrasado" || n.tipo === "pedido_cancelado_auto") atual.urgente = true;
+    if (n.tipo === "pedido_atrasado" || n.tipo === "pedido_cancelado_auto" || n.tipo === "avaliacao_ruim")
+      atual.urgente = true;
     badgesPorUnidade.set(n.unidade_id, atual);
   }
 

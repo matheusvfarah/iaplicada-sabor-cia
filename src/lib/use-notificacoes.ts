@@ -4,7 +4,12 @@ import { supabase } from "@/lib/supabase";
 import { playNotificationSound, playHorarioAlertSound } from "@/lib/notification-sound";
 
 export type TipoNotificacao =
-  "pedido_novo" | "pedido_cancelado_auto" | "pedido_atrasado" | "vai_abrir" | "vai_fechar";
+  | "pedido_novo"
+  | "pedido_cancelado_auto"
+  | "pedido_atrasado"
+  | "avaliacao_ruim"
+  | "vai_abrir"
+  | "vai_fechar";
 
 export type Notificacao = {
   id: number;
@@ -22,6 +27,7 @@ export const TIPOS_OPERACIONAIS = new Set<TipoNotificacao>([
   "pedido_novo",
   "pedido_cancelado_auto",
   "pedido_atrasado",
+  "avaliacao_ruim",
 ]);
 
 const SELECT_COLS = "id, unidade_id, tipo, titulo, mensagem, ref_pedido_id, criado_em, lida";

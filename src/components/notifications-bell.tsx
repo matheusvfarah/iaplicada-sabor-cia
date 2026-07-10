@@ -1,4 +1,4 @@
-import { Bell, CheckCircle2, PackageOpen, XCircle, AlertTriangle, Clock } from "lucide-react";
+import { Bell, CheckCircle2, PackageOpen, XCircle, AlertTriangle, Clock, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useSession } from "@/lib/auth";
@@ -11,16 +11,19 @@ const TIPO_ICON: Record<TipoNotificacao, typeof Bell> = {
   pedido_novo: PackageOpen,
   pedido_cancelado_auto: XCircle,
   pedido_atrasado: AlertTriangle,
+  avaliacao_ruim: Star,
   vai_abrir: Clock,
   vai_fechar: Clock,
 };
 
-// Hierarquia visual: atrasado/cancelado = vermelho, pedido novo =
-// âmbar, horário = neutro — cor só no ícone, nunca na linha inteira.
+// Hierarquia visual: atrasado/cancelado/avaliação ruim = vermelho,
+// pedido novo = âmbar, horário = neutro — cor só no ícone, nunca na
+// linha inteira.
 const TIPO_ICON_CLASS: Record<TipoNotificacao, string> = {
   pedido_novo: "text-accent-tint-foreground",
   pedido_cancelado_auto: "text-destructive",
   pedido_atrasado: "text-destructive",
+  avaliacao_ruim: "text-destructive",
   vai_abrir: "text-muted-foreground",
   vai_fechar: "text-muted-foreground",
 };
