@@ -1,13 +1,13 @@
 # Automações (n8n Cloud)
 
-Quatro workflows exportados como JSON (`Workflows → Import from File` no n8n):
+Dois workflows exportados como JSON (`Workflows → Import from File` no n8n):
 
-| Workflow                                                       | Gatilho                                   | Descrição                                                                                           |
+| Workflow                                                | Gatilho                                   | Descrição                                                                                                                   |
 | -------------------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| [`alerta-meta-diaria.json`](./alerta-meta-diaria.json)         | Schedule (08:00 America/Sao_Paulo)        | **Requisito do teste.** Consulta `v_alerta_metas`, gera diagnóstico via Claude API e insere em `alertas` + e-mail ao gestor |
-| [`alerta-avaliacao-ruim.json`](./alerta-avaliacao-ruim.json)   | Webhook (Supabase Database Webhook)       | Nota ≤ 2 dispara alerta imediato ao gerente da unidade (padrão event-driven) — **descontinuado, ver nota no WF2** |
-| [`simulador-pedidos.json`](./simulador-pedidos.json)           | Schedule (curto, com sorteio de execução) | Simula pedidos chegando pela mesma API que um integrador real usaria (adicional, fora do requisito) |
-| [`gerar-notificacoes.json`](./gerar-notificacoes.json)         | Schedule (a cada 1 minuto)                | Chama a RPC `gerar_notificacoes()` — cancelamento automático e aviso de pedido atrasado (fallback do `pg_cron`, ver WF4 abaixo) |
+| [`alerta-meta-diaria.json`](./alerta-meta-diaria.json) | Schedule (08:00 America/Sao_Paulo)        | **Requisito do teste.** Consulta `v_alerta_metas`, gera diagnóstico via Claude API e insere em `alertas` + e-mail ao gestor |
+| [`simulador-pedidos.json`](./simulador-pedidos.json)   | Schedule (curto, com sorteio de execução) | Simula pedidos chegando pela mesma API que um integrador real usaria (adicional, fora do requisito)                        |
+
+Avaliação ruim, atraso de pedido e cancelamento automático **não dependem de n8n** — rodam direto no banco via `pg_cron` (ver seção "Cron no banco" abaixo). Não há workflow n8n pra eles.
 
 ## WF1 — `alerta-meta-diaria` (requisito + IA)
 
@@ -17,27 +17,21 @@ Racional: o requisito pede "envie um alerta"; entregamos o alerta com diagnósti
 
 **Demo:** o seed deixa a unidade Santana abaixo de 60% da meta. Como o gatilho de dias (`dias_restantes <= 10`) pode não bater no dia da avaliação, execute manualmente (`Execute Workflow`) após ajustar temporariamente o filtro para `dias_restantes <= 31`, ou aguarde a janela real.
 
-## WF2 — `alerta-avaliacao-ruim` (event-driven) — descontinuado
+## Cron no banco (sem n8n): atraso, cancelamento e avaliação simulada
 
-Fluxo original: **Webhook** ← Supabase Database Webhook em INSERT de `avaliacoes` → **Code**: valida o header `x-webhook-secret` e filtra nota ≤ 2 → **Postgres**: enriquece com pedido/unidade → insere em `alertas` (badge aparece ao vivo no painel) → **E-mail** ao gerente.
+Fora do escopo do teste (que pede só o alerta de meta), o app tem duas funções SQL agendadas via `pg_cron` direto no Supabase, sem depender de nenhum workflow externo:
 
-**Substituído pelo simulador de avaliações direto no banco** (ver `simular_avaliacoes()`, `supabase/migrations/20260722000028_simulador_avaliacoes.sql`) — a própria função SQL já insere em `alertas` quando a nota é ≤ 2, sem precisar de webhook/n8n no caminho crítico. O JSON deste workflow fica no repo só como referência do padrão event-driven; **não configure o Database Webhook do Supabase pra `avaliacoes`** se for usar o simulador, senão a mesma avaliação ruim gera 2 alertas (um da função SQL, outro do webhook).
+- **`gerar_notificacoes()`** (`supabase/migrations/20260714000020_gerar_notificacoes.sql`) — cancela automaticamente pedidos parados em `pendente`/`recebido` além do tempo limite da unidade, e notifica atraso (`pedido_atrasado`) quando um pedido em `preparando` estoura o limite.
+- **`simular_avaliacoes()`** (`supabase/migrations/20260722000028_simulador_avaliacoes.sql`, notificação em `20260723000030_notificar_avaliacao_ruim.sql`) — pedidos `entregue` há mais de 30s têm 20% de chance de virar avaliação com nota aleatória; nota ≤ 2 notifica o gerente da unidade + gestores gerais.
 
-## WF4 — `gerar-notificacoes` (cron de atraso/cancelamento/avaliações)
+Agendamento (já aplicado nas migrations, roda sozinho):
 
-Fluxo: **Schedule a cada 1 minuto** → **Postgres**: `select gerar_notificacoes(); select simular_avaliacoes();`.
+```sql
+select cron.schedule('gerar_notificacoes', '* * * * *', 'select gerar_notificacoes();');
+select cron.schedule('simular_avaliacoes', '* * * * *', 'select simular_avaliacoes();');
+```
 
-`gerar_notificacoes()` (`supabase/migrations/20260714000020_gerar_notificacoes.sql`) cancela automaticamente pedidos parados em `pendente` além do limite da unidade e insere notificação `pedido_atrasado` para o gerente da unidade + todos os `gestor_geral` quando um pedido em `preparando` estoura `limite_atraso_min`.
-
-`simular_avaliacoes()` (`supabase/migrations/20260722000028_simulador_avaliacoes.sql`) varre pedidos em `entregue` há mais de 30s ainda não sorteados e, com 20% de chance, gera uma avaliação com nota aleatória (1-5) pro pedido; nota ≤ 2 insere direto em `alertas` (tipo `avaliacao`), mesmo efeito que o WF2 tinha via webhook.
-
-Nenhuma das duas roda sozinha — precisa de um `pg_cron` (só em plano pago do Supabase, já agendado condicionalmente nas próprias migrations) ou deste workflow chamando as RPCs a cada minuto. Sem um dos dois: o card do pedido fica com o ícone de atraso (isso é só cálculo visual no cliente) mas nenhuma notificação real é criada; e pedidos entregues nunca viram avaliação.
-
-**Dedupe:** `gerar_notificacoes()` usa o índice único `uniq_notificacao_pedido`; `simular_avaliacoes()` usa a coluna `pedidos.avaliacao_sorteada` (marca o pedido como já sorteado, dê ou não avaliação, pra não re-rolar a cada minuto) mais o `unique` em `avaliacoes.pedido_id`. Rodar a cada minuto não duplica nada em nenhum dos dois casos.
-
-**Demo atraso:** deixar um pedido em `preparando` além do `limite_atraso_min` da unidade (seed ou update manual) → rodar o workflow manualmente (`Execute Workflow`) ou esperar até 1 min → notificação aparece no sino/toast do gerente e dos gestores gerais.
-
-**Demo avaliação:** marcar um pedido como `entregue` (ou esperar o fluxo normal do Kanban), esperar 30s → rodar o workflow (ou esperar o cron) → ~1 em cada 5 pedidos ganha uma avaliação na aba Avaliações da unidade; se a nota vier ≤ 2, alerta aparece no painel do gestor.
+Isso já estava ativo antes de qualquer workflow n8n dedicado a isso ter sido cogitado — os workflows n8n que existiam pra isso (`gerar-notificacoes.json`, `alerta-avaliacao-ruim.json`) foram removidos do repo porque adicionavam uma dependência externa desnecessária pra algo que o próprio Postgres já resolve sozinho, de forma mais simples e sem custo de infraestrutura extra.
 
 ## Credenciais e variáveis (n8n)
 
@@ -45,11 +39,10 @@ Criar após importar (os JSONs referenciam por nome, nunca hardcoded):
 
 | Credencial/variável | Uso |
 | --- | --- |
-| Credencial Postgres `Supabase Sabor & Cia (Postgres)` | WF1, WF2 e WF4 (host/porta/senha do Supabase → Database Settings; usar o pooler em `Session mode`) |
-| Credencial SMTP `SMTP Sabor & Cia` | nodes de e-mail (qualquer SMTP de teste; Mailtrap serve para a demo) |
+| Credencial Postgres `Supabase Sabor & Cia (Postgres)` | WF1 (host/porta/senha do Supabase → Database Settings; usar o pooler em `Session mode`) |
+| Credencial SMTP `SMTP Sabor & Cia` | node de e-mail (qualquer SMTP de teste; Mailtrap serve para a demo) |
 | `ANTHROPIC_API_KEY` | WF1 — diagnóstico via Claude |
 | `EMAIL_GESTOR` | destinatário dos alertas |
-| `SUPABASE_WEBHOOK_SECRET` | WF2 — autenticação do Database Webhook |
 | `APP_URL` + `ORDER_SIMULATOR_SECRET` | WF3 — ver seção do simulador |
 
 ## Produção (como eu configuraria de verdade)
@@ -91,7 +84,7 @@ O endpoint (implementado em `src/server.ts` /
 partir do preço atual do cardápio (nunca confia no payload) e insere o
 pedido com status `pendente` via RPC atômica (`rpc_inserir_pedido_simulado`).
 O pedido aparece **ao vivo** (Supabase Realtime) como popup no Dashboard da
-Unidade — o gerente aceita (`recebido`) ou recusa (`cancelado`, populando
+Unidade — o gerente aceita (`preparando`) ou recusa (`cancelado`, populando
 `log_cancelamentos` via trigger já existente).
 
 **Variáveis de ambiente do n8n** (`Settings → Environments` ou variáveis do
@@ -103,6 +96,11 @@ workflow, nunca hardcoded nos nodes):
 | `SUPABASE_ANON_KEY`      | mesma de `VITE_SUPABASE_ANON_KEY` (pública, só lê cardápio) |
 | `APP_URL`                | URL do deploy (Vercel) ou túnel local (ex. ngrok) em dev    |
 | `ORDER_SIMULATOR_SECRET` | mesmo valor configurado no servidor do app                  |
+
+Se a instância do n8n não tiver acesso a variáveis de ambiente (planos sem
+`$env.*` liberado), a URL fica hardcoded no node (não é sensível) e o secret
+vai numa **Credential do tipo Header Auth**, não em variável — ver os nodes
+"Consulta status da rede" / "Envia pedido simulado" no JSON.
 
 O JSON foi validado como sintaticamente correto e revisado nó a nó contra o
 schema desta versão do n8n — a importação (`n8n import:workflow` ou
@@ -161,8 +159,7 @@ x-webhook-secret: <ORDER_SIMULATOR_SECRET>
 | `405`  | `{ "error": "method not allowed" }`                                 | Método diferente de `POST`                     |
 | `500`  | `{ "error": "ORDER_SIMULATOR_SECRET não configurado no servidor" }` | Variável de ambiente ausente no deploy         |
 
-## Nesta pasta (quando concluído)
+## Nesta pasta
 
-- `*.json` — workflows exportados do n8n
-- Screenshots dos workflows
+- `*.json` — workflows exportados do n8n (só os 2 realmente usados)
 - Documentação de configuração em produção (variáveis de ambiente, secret do webhook, error workflow, timezone, política de dedupe)
