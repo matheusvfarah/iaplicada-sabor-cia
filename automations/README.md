@@ -1,12 +1,13 @@
 # Automações (n8n Cloud)
 
-Três workflows exportados como JSON (`Workflows → Import from File` no n8n):
+Quatro workflows exportados como JSON (`Workflows → Import from File` no n8n):
 
 | Workflow                                                       | Gatilho                                   | Descrição                                                                                           |
 | -------------------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | [`alerta-meta-diaria.json`](./alerta-meta-diaria.json)         | Schedule (08:00 America/Sao_Paulo)        | **Requisito do teste.** Consulta `v_alerta_metas`, gera diagnóstico via Claude API e insere em `alertas` + e-mail ao gestor |
 | [`alerta-avaliacao-ruim.json`](./alerta-avaliacao-ruim.json)   | Webhook (Supabase Database Webhook)       | Nota ≤ 2 dispara alerta imediato ao gerente da unidade (padrão event-driven)                        |
 | [`simulador-pedidos.json`](./simulador-pedidos.json)           | Schedule (curto, com sorteio de execução) | Simula pedidos chegando pela mesma API que um integrador real usaria (adicional, fora do requisito) |
+| [`gerar-notificacoes.json`](./gerar-notificacoes.json)         | Schedule (a cada 1 minuto)                | Chama a RPC `gerar_notificacoes()` — cancelamento automático e aviso de pedido atrasado (fallback do `pg_cron`, ver WF4 abaixo) |
 
 ## WF1 — `alerta-meta-diaria` (requisito + IA)
 
@@ -24,13 +25,23 @@ Fluxo: **Webhook** ← Supabase Database Webhook em INSERT de `avaliacoes` → *
 
 **Demo:** inserir uma avaliação nota 1 pelo SQL editor → alerta aparece no painel em segundos.
 
+## WF4 — `gerar-notificacoes` (cron de atraso/cancelamento)
+
+Fluxo: **Schedule a cada 1 minuto** → **Postgres**: `select gerar_notificacoes();`.
+
+`gerar_notificacoes()` (`supabase/migrations/20260714000020_gerar_notificacoes.sql`) cancela automaticamente pedidos parados em `pendente` além do limite da unidade e insere notificação `pedido_atrasado` para o gerente da unidade + todos os `gestor_geral` quando um pedido em `preparando` estoura `limite_atraso_min`. A função em si não roda sozinha — precisa de um `pg_cron` (só em plano pago do Supabase) ou deste workflow chamando a RPC a cada minuto. Sem um dos dois, o card do pedido fica com o ícone de atraso (isso é só cálculo visual no cliente) mas nenhuma notificação real é criada — nem toast, nem sino, nem badge da sidebar.
+
+**Dedupe:** já embutido na tabela (`uniq_notificacao_pedido`), então rodar a cada minuto não duplica notificação para o mesmo pedido/destinatário.
+
+**Demo:** deixar um pedido em `preparando` além do `limite_atraso_min` da unidade (seed ou update manual) → rodar o workflow manualmente (`Execute Workflow`) ou esperar até 1 min → notificação aparece no sino/toast do gerente e dos gestores gerais.
+
 ## Credenciais e variáveis (n8n)
 
 Criar após importar (os JSONs referenciam por nome, nunca hardcoded):
 
 | Credencial/variável | Uso |
 | --- | --- |
-| Credencial Postgres `Supabase Sabor & Cia (Postgres)` | WF1 e WF2 (host/porta/senha do Supabase → Database Settings; usar o pooler em `Session mode`) |
+| Credencial Postgres `Supabase Sabor & Cia (Postgres)` | WF1, WF2 e WF4 (host/porta/senha do Supabase → Database Settings; usar o pooler em `Session mode`) |
 | Credencial SMTP `SMTP Sabor & Cia` | nodes de e-mail (qualquer SMTP de teste; Mailtrap serve para a demo) |
 | `ANTHROPIC_API_KEY` | WF1 — diagnóstico via Claude |
 | `EMAIL_GESTOR` | destinatário dos alertas |

@@ -31,20 +31,22 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.APP_URL }}/api/status",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "x-webhook-secret", "value": "={{ $env.ORDER_SIMULATOR_SECRET }}" }
-          ]
-        },
+        "url": "https://iaplicada-sabor-cia.vercel.app/api/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "options": {}
       },
       "id": "a1a1a1a1-0003-4000-8000-000000000003",
       "name": "Consulta status da rede",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [80, 0]
+      "position": [80, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "order-simulator-secret",
+          "name": "Order Simulator Secret"
+        }
+      }
     },
     {
       "parameters": {
@@ -59,13 +61,12 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.APP_URL }}/api/pedidos/simular",
+        "url": "https://iaplicada-sabor-cia.vercel.app/api/pedidos/simular",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [
-            { "name": "x-webhook-secret", "value": "={{ $env.ORDER_SIMULATOR_SECRET }}" },
-            { "name": "Content-Type", "value": "application/json" }
-          ]
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
         },
         "sendBody": true,
         "specifyBody": "json",
@@ -76,7 +77,13 @@
       "name": "Envia pedido simulado",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [560, 0]
+      "position": [560, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "order-simulator-secret",
+          "name": "Order Simulator Secret"
+        }
+      }
     }
   ],
   "connections": {
