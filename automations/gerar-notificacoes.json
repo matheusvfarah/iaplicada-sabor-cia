@@ -21,11 +21,11 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "select gerar_notificacoes();",
+        "query": "select gerar_notificacoes();\nselect simular_avaliacoes();",
         "options": {}
       },
       "id": "c1c1c1c1-0002-4000-8000-000000000002",
-      "name": "Roda gerar_notificacoes()",
+      "name": "Roda gerar_notificacoes() e simular_avaliacoes()",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
       "position": [-160, 0],
@@ -38,7 +38,7 @@
   ],
   "connections": {
     "A cada minuto": {
-      "main": [[{ "node": "Roda gerar_notificacoes()", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Roda gerar_notificacoes() e simular_avaliacoes()", "type": "main", "index": 0 }]]
     }
   },
   "settings": {

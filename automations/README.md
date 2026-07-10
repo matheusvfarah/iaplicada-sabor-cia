@@ -5,7 +5,7 @@ Quatro workflows exportados como JSON (`Workflows → Import from File` no n8n):
 | Workflow                                                       | Gatilho                                   | Descrição                                                                                           |
 | -------------------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | [`alerta-meta-diaria.json`](./alerta-meta-diaria.json)         | Schedule (08:00 America/Sao_Paulo)        | **Requisito do teste.** Consulta `v_alerta_metas`, gera diagnóstico via Claude API e insere em `alertas` + e-mail ao gestor |
-| [`alerta-avaliacao-ruim.json`](./alerta-avaliacao-ruim.json)   | Webhook (Supabase Database Webhook)       | Nota ≤ 2 dispara alerta imediato ao gerente da unidade (padrão event-driven)                        |
+| [`alerta-avaliacao-ruim.json`](./alerta-avaliacao-ruim.json)   | Webhook (Supabase Database Webhook)       | Nota ≤ 2 dispara alerta imediato ao gerente da unidade (padrão event-driven) — **descontinuado, ver nota no WF2** |
 | [`simulador-pedidos.json`](./simulador-pedidos.json)           | Schedule (curto, com sorteio de execução) | Simula pedidos chegando pela mesma API que um integrador real usaria (adicional, fora do requisito) |
 | [`gerar-notificacoes.json`](./gerar-notificacoes.json)         | Schedule (a cada 1 minuto)                | Chama a RPC `gerar_notificacoes()` — cancelamento automático e aviso de pedido atrasado (fallback do `pg_cron`, ver WF4 abaixo) |
 
@@ -17,23 +17,27 @@ Racional: o requisito pede "envie um alerta"; entregamos o alerta com diagnósti
 
 **Demo:** o seed deixa a unidade Santana abaixo de 60% da meta. Como o gatilho de dias (`dias_restantes <= 10`) pode não bater no dia da avaliação, execute manualmente (`Execute Workflow`) após ajustar temporariamente o filtro para `dias_restantes <= 31`, ou aguarde a janela real.
 
-## WF2 — `alerta-avaliacao-ruim` (event-driven)
+## WF2 — `alerta-avaliacao-ruim` (event-driven) — descontinuado
 
-Fluxo: **Webhook** ← Supabase Database Webhook em INSERT de `avaliacoes` → **Code**: valida o header `x-webhook-secret` e filtra nota ≤ 2 → **Postgres**: enriquece com pedido/unidade → insere em `alertas` (badge aparece ao vivo no painel) → **E-mail** ao gerente.
+Fluxo original: **Webhook** ← Supabase Database Webhook em INSERT de `avaliacoes` → **Code**: valida o header `x-webhook-secret` e filtra nota ≤ 2 → **Postgres**: enriquece com pedido/unidade → insere em `alertas` (badge aparece ao vivo no painel) → **E-mail** ao gerente.
 
-**Configurar no Supabase:** Database → Webhooks → Create: tabela `avaliacoes`, evento INSERT, URL = a Production URL do node Webhook do n8n, HTTP Headers com `x-webhook-secret` = mesmo valor de `SUPABASE_WEBHOOK_SECRET` no n8n.
+**Substituído pelo simulador de avaliações direto no banco** (ver `simular_avaliacoes()`, `supabase/migrations/20260722000028_simulador_avaliacoes.sql`) — a própria função SQL já insere em `alertas` quando a nota é ≤ 2, sem precisar de webhook/n8n no caminho crítico. O JSON deste workflow fica no repo só como referência do padrão event-driven; **não configure o Database Webhook do Supabase pra `avaliacoes`** se for usar o simulador, senão a mesma avaliação ruim gera 2 alertas (um da função SQL, outro do webhook).
 
-**Demo:** inserir uma avaliação nota 1 pelo SQL editor → alerta aparece no painel em segundos.
+## WF4 — `gerar-notificacoes` (cron de atraso/cancelamento/avaliações)
 
-## WF4 — `gerar-notificacoes` (cron de atraso/cancelamento)
+Fluxo: **Schedule a cada 1 minuto** → **Postgres**: `select gerar_notificacoes(); select simular_avaliacoes();`.
 
-Fluxo: **Schedule a cada 1 minuto** → **Postgres**: `select gerar_notificacoes();`.
+`gerar_notificacoes()` (`supabase/migrations/20260714000020_gerar_notificacoes.sql`) cancela automaticamente pedidos parados em `pendente` além do limite da unidade e insere notificação `pedido_atrasado` para o gerente da unidade + todos os `gestor_geral` quando um pedido em `preparando` estoura `limite_atraso_min`.
 
-`gerar_notificacoes()` (`supabase/migrations/20260714000020_gerar_notificacoes.sql`) cancela automaticamente pedidos parados em `pendente` além do limite da unidade e insere notificação `pedido_atrasado` para o gerente da unidade + todos os `gestor_geral` quando um pedido em `preparando` estoura `limite_atraso_min`. A função em si não roda sozinha — precisa de um `pg_cron` (só em plano pago do Supabase) ou deste workflow chamando a RPC a cada minuto. Sem um dos dois, o card do pedido fica com o ícone de atraso (isso é só cálculo visual no cliente) mas nenhuma notificação real é criada — nem toast, nem sino, nem badge da sidebar.
+`simular_avaliacoes()` (`supabase/migrations/20260722000028_simulador_avaliacoes.sql`) varre pedidos em `entregue` há mais de 30s ainda não sorteados e, com 20% de chance, gera uma avaliação com nota aleatória (1-5) pro pedido; nota ≤ 2 insere direto em `alertas` (tipo `avaliacao`), mesmo efeito que o WF2 tinha via webhook.
 
-**Dedupe:** já embutido na tabela (`uniq_notificacao_pedido`), então rodar a cada minuto não duplica notificação para o mesmo pedido/destinatário.
+Nenhuma das duas roda sozinha — precisa de um `pg_cron` (só em plano pago do Supabase, já agendado condicionalmente nas próprias migrations) ou deste workflow chamando as RPCs a cada minuto. Sem um dos dois: o card do pedido fica com o ícone de atraso (isso é só cálculo visual no cliente) mas nenhuma notificação real é criada; e pedidos entregues nunca viram avaliação.
 
-**Demo:** deixar um pedido em `preparando` além do `limite_atraso_min` da unidade (seed ou update manual) → rodar o workflow manualmente (`Execute Workflow`) ou esperar até 1 min → notificação aparece no sino/toast do gerente e dos gestores gerais.
+**Dedupe:** `gerar_notificacoes()` usa o índice único `uniq_notificacao_pedido`; `simular_avaliacoes()` usa a coluna `pedidos.avaliacao_sorteada` (marca o pedido como já sorteado, dê ou não avaliação, pra não re-rolar a cada minuto) mais o `unique` em `avaliacoes.pedido_id`. Rodar a cada minuto não duplica nada em nenhum dos dois casos.
+
+**Demo atraso:** deixar um pedido em `preparando` além do `limite_atraso_min` da unidade (seed ou update manual) → rodar o workflow manualmente (`Execute Workflow`) ou esperar até 1 min → notificação aparece no sino/toast do gerente e dos gestores gerais.
+
+**Demo avaliação:** marcar um pedido como `entregue` (ou esperar o fluxo normal do Kanban), esperar 30s → rodar o workflow (ou esperar o cron) → ~1 em cada 5 pedidos ganha uma avaliação na aba Avaliações da unidade; se a nota vier ≤ 2, alerta aparece no painel do gestor.
 
 ## Credenciais e variáveis (n8n)
 

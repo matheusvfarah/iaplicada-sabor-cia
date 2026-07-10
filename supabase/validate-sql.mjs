@@ -822,4 +822,88 @@ if (
   process.exit(1);
 }
 
+// simular_avaliacoes() (028): pedido elegível (entregue há mais de 30s,
+// ainda não sorteado) é sempre marcado como sorteado, dê ou não
+// avaliação — senão o cron re-rolaria a cada minuto e infla a chance
+// real acima de 20%.
+const [{ id: pedidoEntregueVelho }] = (
+  await db.query(
+    `insert into pedidos (unidade_id, valor, plataforma, status, data_pedido, preparando_em, entregue_em)
+     values (1, 60.00, 'proprio', 'entregue', now() - interval '1 hour', now() - interval '50 minutes', now() - interval '40 seconds')
+     returning id`,
+  )
+).rows;
+const [{ id: pedidoEntregueRecente }] = (
+  await db.query(
+    `insert into pedidos (unidade_id, valor, plataforma, status, data_pedido, preparando_em, entregue_em)
+     values (1, 61.00, 'proprio', 'entregue', now() - interval '1 hour', now() - interval '50 minutes', now() - interval '5 seconds')
+     returning id`,
+  )
+).rows;
+
+await db.query("select simular_avaliacoes()");
+
+const sorteioVelho = (
+  await db.query(`select avaliacao_sorteada from pedidos where id = ${pedidoEntregueVelho}`)
+).rows[0];
+console.log(
+  "Simular avaliações: pedido entregue há mais de 30s é sorteado:",
+  sorteioVelho.avaliacao_sorteada === true,
+  "(esperado true)",
+);
+
+const sorteioRecente = (
+  await db.query(`select avaliacao_sorteada from pedidos where id = ${pedidoEntregueRecente}`)
+).rows[0];
+console.log(
+  "Simular avaliações: pedido entregue há menos de 30s ainda não é sorteado:",
+  sorteioRecente.avaliacao_sorteada === false,
+  "(esperado true)",
+);
+
+// Rodar de novo não re-sorteia o mesmo pedido (idempotência).
+const avaliacoesAntes = (
+  await db.query(`select count(*)::int as n from avaliacoes where pedido_id = ${pedidoEntregueVelho}`)
+).rows[0].n;
+await db.query("select simular_avaliacoes()");
+const avaliacoesDepois = (
+  await db.query(`select count(*)::int as n from avaliacoes where pedido_id = ${pedidoEntregueVelho}`)
+).rows[0].n;
+console.log(
+  "Simular avaliações: rodar de novo não duplica/re-sorteia:",
+  avaliacoesDepois === avaliacoesAntes,
+  "(esperado true)",
+);
+
+// Testa a implicação, não o valor aleatório em si (não força seed pra
+// não acoplar o teste no algoritmo do PRNG do Postgres/PGlite): se
+// saiu avaliação e a nota é <= 2, tem que ter gerado alerta tipo
+// 'avaliacao'; se a nota é boa, não pode ter gerado alerta.
+const avaliacaoGerada = (
+  await db.query(`select nota from avaliacoes where pedido_id = ${pedidoEntregueVelho}`)
+).rows[0];
+if (avaliacaoGerada) {
+  const alertaGerado = (
+    await db.query(
+      `select id from alertas where unidade_id = 1 and tipo = 'avaliacao' and payload->>'pedido_id' = '${pedidoEntregueVelho}'`,
+    )
+  ).rows;
+  const notaRuim = avaliacaoGerada.nota <= 2;
+  console.log(
+    "Simular avaliações: nota <= 2 gera alerta, nota boa não gera:",
+    notaRuim ? alertaGerado.length === 1 : alertaGerado.length === 0,
+    "(esperado true, nota =",
+    avaliacaoGerada.nota + ")",
+  );
+} else {
+  console.log(
+    "Simular avaliações: pedido não saiu sorteado nesta execução (~80% de chance, ok)",
+  );
+}
+
+if (sorteioVelho.avaliacao_sorteada !== true || sorteioRecente.avaliacao_sorteada !== false) {
+  console.error("FAIL simular_avaliacoes(): janela de 30s ou marcação de sorteado incorreta");
+  process.exit(1);
+}
+
 console.log("\nTUDO OK — migrations, seed, trigger, RPCs e RLS validados.");
