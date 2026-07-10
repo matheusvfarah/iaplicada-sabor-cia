@@ -1,14 +1,49 @@
 # Automações (n8n Cloud)
 
-_Em construção — ver `docs/01-spec-design-sabor-cia.md` seção 3 para o desenho completo._
+Três workflows exportados como JSON (`Workflows → Import from File` no n8n):
 
-## Workflows planejados
+| Workflow                                                       | Gatilho                                   | Descrição                                                                                           |
+| -------------------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| [`alerta-meta-diaria.json`](./alerta-meta-diaria.json)         | Schedule (08:00 America/Sao_Paulo)        | **Requisito do teste.** Consulta `v_alerta_metas`, gera diagnóstico via Claude API e insere em `alertas` + e-mail ao gestor |
+| [`alerta-avaliacao-ruim.json`](./alerta-avaliacao-ruim.json)   | Webhook (Supabase Database Webhook)       | Nota ≤ 2 dispara alerta imediato ao gerente da unidade (padrão event-driven)                        |
+| [`simulador-pedidos.json`](./simulador-pedidos.json)           | Schedule (curto, com sorteio de execução) | Simula pedidos chegando pela mesma API que um integrador real usaria (adicional, fora do requisito) |
 
-| Workflow                | Gatilho                                   | Descrição                                                                                           |
-| ----------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `alerta-meta-diaria`    | Schedule (08:00 America/Sao_Paulo)        | Consulta `v_alerta_metas`, gera diagnóstico via Claude API e insere em `alertas` + e-mail ao gestor |
-| `alerta-avaliacao-ruim` | Webhook (Supabase Database Webhook)       | Nota ≤ 2 dispara alerta ao gerente da unidade                                                       |
-| `simulador-pedidos`     | Schedule (curto, com sorteio de execução) | Simula pedidos novos chegando — ver desenho abaixo (adicional, fora do requisito original)          |
+## WF1 — `alerta-meta-diaria` (requisito + IA)
+
+Fluxo: **Schedule 08:00** → **Postgres**: query em `v_alerta_metas` filtrando `pct_meta < 0.6 and dias_restantes <= 10`, com dedupe embutido no SQL (`not exists` em `alertas` tipo `meta` do mês corrente — um alerta por unidade/mês, mesmo rodando todo dia) → **HTTP**: Claude API gera diagnóstico de 4 linhas (situação, hipótese de causa, ação recomendada) a partir dos KPIs → **Postgres**: insere em `alertas` (aparece no sino/painel do gestor via realtime) → **E-mail** ao gestor.
+
+Racional: o requisito pede "envie um alerta"; entregamos o alerta com diagnóstico gerado por IA — coerente com o posicionamento da IAplicada. Se a Claude API falhar, o node "Prepara alerta" tem fallback com mensagem factual sem IA (o alerta nunca deixa de sair).
+
+**Demo:** o seed deixa a unidade Santana abaixo de 60% da meta. Como o gatilho de dias (`dias_restantes <= 10`) pode não bater no dia da avaliação, execute manualmente (`Execute Workflow`) após ajustar temporariamente o filtro para `dias_restantes <= 31`, ou aguarde a janela real.
+
+## WF2 — `alerta-avaliacao-ruim` (event-driven)
+
+Fluxo: **Webhook** ← Supabase Database Webhook em INSERT de `avaliacoes` → **Code**: valida o header `x-webhook-secret` e filtra nota ≤ 2 → **Postgres**: enriquece com pedido/unidade → insere em `alertas` (badge aparece ao vivo no painel) → **E-mail** ao gerente.
+
+**Configurar no Supabase:** Database → Webhooks → Create: tabela `avaliacoes`, evento INSERT, URL = a Production URL do node Webhook do n8n, HTTP Headers com `x-webhook-secret` = mesmo valor de `SUPABASE_WEBHOOK_SECRET` no n8n.
+
+**Demo:** inserir uma avaliação nota 1 pelo SQL editor → alerta aparece no painel em segundos.
+
+## Credenciais e variáveis (n8n)
+
+Criar após importar (os JSONs referenciam por nome, nunca hardcoded):
+
+| Credencial/variável | Uso |
+| --- | --- |
+| Credencial Postgres `Supabase Sabor & Cia (Postgres)` | WF1 e WF2 (host/porta/senha do Supabase → Database Settings; usar o pooler em `Session mode`) |
+| Credencial SMTP `SMTP Sabor & Cia` | nodes de e-mail (qualquer SMTP de teste; Mailtrap serve para a demo) |
+| `ANTHROPIC_API_KEY` | WF1 — diagnóstico via Claude |
+| `EMAIL_GESTOR` | destinatário dos alertas |
+| `SUPABASE_WEBHOOK_SECRET` | WF2 — autenticação do Database Webhook |
+| `APP_URL` + `ORDER_SIMULATOR_SECRET` | WF3 — ver seção do simulador |
+
+## Produção (como eu configuraria de verdade)
+
+- **Credenciais** sempre em credentials/variáveis do n8n — os JSONs do repo não contêm nenhum secret.
+- **Error workflow** global: capturar falha de qualquer node → notificar canal de ops; HTTP nodes com retry (2x, backoff) para instabilidade de rede.
+- **Dedupe** no banco (SQL), não em memória do n8n — sobrevive a restart e a execuções concorrentes.
+- **Timezone** fixado em America/Sao_Paulo nos settings de cada workflow (cron do n8n Cloud roda em UTC por padrão).
+- **Kill switch:** o toggle Ativo/Inativo de cada workflow; o simulador fica DESLIGADO por padrão e é ativado só para demonstração.
 
 ### `simulador-pedidos` — adicional (fora do escopo original)
 
@@ -22,20 +57,17 @@ Workflow pronto pra importar em **[`simulador-pedidos.json`](./simulador-pedidos
 
 1. **Schedule Trigger** — a cada 2 min. n8n não tem "intervalo aleatório"
    nativo sem um loop de Wait, então a aleatoriedade fica no node seguinte.
-2. **Code — "Sorteia disparo e unidade"** — ~40% de chance de realmente virar
-   um pedido nessa execução (senão retorna `[]` e a cadeia para ali, sem
-   pedidos vazios); sorteia uma unidade ativa (`[1,2,3,4]` — Centro,
-   Pinheiros, Moema, Santana) e a plataforma (`ifood`/`rappi`/`proprio`).
-3. **HTTP Request — "Busca cardápio disponível"** — `POST` na RPC pública
-   `rpc_cardapio_disponivel` (nova, migration `20260709000014`) com a `anon
-key`. Sem isso o gerador ficaria cego sobre preços/disponibilidade e teria
-   que adivinhar `produto_id`, quebrando toda vez que um item fosse pausado
-   no Cardápio — RLS normal de `produtos` exige usuário autenticado, então
-   essa RPC é `security definer`, expondo só `produto_id`/`nome`/`preco` dos
-   itens com `disponivel = true` da unidade pedida (equivalente a qualquer
-   cardápio público de verdade, nada sensível).
-4. **Code — "Monta itens do pedido"** — do cardápio retornado, sorteia 1 a 4
-   itens distintos e quantidades (1–3 cada), montando o payload final.
+2. **Code — "Sorteia disparo e plataforma"** — ~40% de chance de realmente
+   virar um pedido nessa execução (senão retorna `[]` e a cadeia para ali);
+   sorteia a plataforma (`ifood`/`rappi`/`proprio`, pesos do seed).
+3. **HTTP Request — "Consulta status da rede"** — `GET /api/status` no
+   servidor do app (header `x-webhook-secret`). O integrador NUNCA toca o
+   banco: o servidor responde quais unidades estão ativas, **abertas agora**
+   (pelo horário de funcionamento) e o cardápio disponível de cada uma
+   (respeitando itens pausados) — exatamente como uma vitrine pública.
+4. **Code — "Monta pedido pela vitrine"** — filtra unidades abertas com
+   cardápio, sorteia a unidade, 1 a 4 itens distintos e quantidades (1–3).
+   Rede fechada ⇒ nenhum pedido nasce fora do horário.
 5. **HTTP Request — "Envia pedido simulado"** — `POST` em
    `{{ $env.APP_URL }}/api/pedidos/simular`, header `x-webhook-secret`.
 

@@ -20,42 +20,38 @@
     },
     {
       "parameters": {
-        "jsCode": "// Simula chegada irregular de pedidos: n8n não tem um\n// \"intervalo aleatório\" nativo sem um loop de Wait, então a\n// aleatoriedade fica aqui — só ~40% das execuções do cron\n// realmente vira um pedido nas plataformas.\nconst CHANCE_DE_DISPARAR = 0.4;\nif (Math.random() > CHANCE_DE_DISPARAR) {\n  return [];\n}\n\nconst UNIDADES_ATIVAS = [1, 2, 3, 4]; // Centro, Pinheiros, Moema, Santana\n\n// ~90% iFood, ~5% Rappi, ~5% pedido próprio — mesma distribuição\n// usada no seed histórico (supabase/seed.sql).\nconst r = Math.random();\nconst plataforma = r < 0.9 ? \"ifood\" : r < 0.95 ? \"rappi\" : \"proprio\";\n\nconst unidade_id = UNIDADES_ATIVAS[Math.floor(Math.random() * UNIDADES_ATIVAS.length)];\n\nreturn [{ json: { unidade_id, plataforma } }];"
+        "jsCode": "// Simula chegada irregular de pedidos: só ~40% das execuções\n// do cron realmente vira pedido. A escolha da unidade acontece\n// DEPOIS, com base no que o servidor disser que está aberto.\nconst CHANCE_DE_DISPARAR = 0.4;\nif (Math.random() > CHANCE_DE_DISPARAR) {\n  return [];\n}\n\n// ~90% iFood, ~5% Rappi, ~5% próprio — mesma distribuição do seed\nconst r = Math.random();\nconst plataforma = r < 0.9 ? \"ifood\" : r < 0.95 ? \"rappi\" : \"proprio\";\n\nreturn [{ json: { plataforma } }];"
       },
       "id": "a1a1a1a1-0002-4000-8000-000000000002",
-      "name": "Sorteia disparo e unidade",
+      "name": "Sorteia disparo e plataforma",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [-160, 0]
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_cardapio_disponivel",
+        "method": "GET",
+        "url": "={{ $env.APP_URL }}/api/status",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey", "value": "={{ $env.SUPABASE_ANON_KEY }}" },
-            { "name": "Content-Type", "value": "application/json" }
+            { "name": "x-webhook-secret", "value": "={{ $env.ORDER_SIMULATOR_SECRET }}" }
           ]
         },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ { \"p_unidade\": $json.unidade_id } }}",
         "options": {}
       },
       "id": "a1a1a1a1-0003-4000-8000-000000000003",
-      "name": "Busca cardápio disponível",
+      "name": "Consulta status da rede",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [80, 0]
     },
     {
       "parameters": {
-        "jsCode": "// Este node recebe 1 item por produto disponível na unidade\n// (RPC pública rpc_cardapio_disponivel, respeitando o toggle de\n// pausa do Cardápio). Monta um pedido com 1 a 4 itens distintos\n// e quantidades aleatórias.\nconst cardapio = $input.all().map((i) => i.json);\nif (cardapio.length === 0) {\n  return []; // nada disponível nessa unidade agora — não gera pedido\n}\n\nconst { unidade_id, plataforma } = $(\"Sorteia disparo e unidade\").first().json;\n\nconst embaralhado = [...cardapio].sort(() => Math.random() - 0.5);\nconst quantidadeItens = 1 + Math.floor(Math.random() * Math.min(4, embaralhado.length));\nconst itens = embaralhado.slice(0, quantidadeItens).map((p) => ({\n  produto_id: p.produto_id,\n  quantidade: 1 + Math.floor(Math.random() * 3),\n}));\n\nreturn [{ json: { unidade_id, plataforma, itens } }];"
+        "jsCode": "// O servidor é a fonte de verdade: só unidades ABERTAS agora e\n// com itens disponíveis no cardápio podem receber pedido.\nconst { plataforma } = $(\"Sorteia disparo e plataforma\").first().json;\nconst unidades = ($json.unidades || []).filter(\n  (u) => u.aberta && (u.cardapio || []).length > 0\n);\nif (unidades.length === 0) {\n  return []; // rede fechada — nenhum pedido nasce fora do horário\n}\n\nconst u = unidades[Math.floor(Math.random() * unidades.length)];\n\nconst embaralhado = [...u.cardapio].sort(() => Math.random() - 0.5);\nconst quantidadeItens = 1 + Math.floor(Math.random() * Math.min(4, embaralhado.length));\nconst itens = embaralhado.slice(0, quantidadeItens).map((p) => ({\n  produto_id: p.produto_id,\n  quantidade: 1 + Math.floor(Math.random() * 3),\n}));\n\nreturn [{ json: { unidade_id: u.unidade_id, plataforma, itens } }];"
       },
       "id": "a1a1a1a1-0004-4000-8000-000000000004",
-      "name": "Monta itens do pedido",
+      "name": "Monta pedido pela vitrine",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [320, 0]
@@ -85,15 +81,15 @@
   ],
   "connections": {
     "A cada 2 minutos": {
-      "main": [[{ "node": "Sorteia disparo e unidade", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Sorteia disparo e plataforma", "type": "main", "index": 0 }]]
     },
-    "Sorteia disparo e unidade": {
-      "main": [[{ "node": "Busca cardápio disponível", "type": "main", "index": 0 }]]
+    "Sorteia disparo e plataforma": {
+      "main": [[{ "node": "Consulta status da rede", "type": "main", "index": 0 }]]
     },
-    "Busca cardápio disponível": {
-      "main": [[{ "node": "Monta itens do pedido", "type": "main", "index": 0 }]]
+    "Consulta status da rede": {
+      "main": [[{ "node": "Monta pedido pela vitrine", "type": "main", "index": 0 }]]
     },
-    "Monta itens do pedido": {
+    "Monta pedido pela vitrine": {
       "main": [[{ "node": "Envia pedido simulado", "type": "main", "index": 0 }]]
     }
   },
