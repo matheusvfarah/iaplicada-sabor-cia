@@ -477,6 +477,114 @@ console.log(
   "(esperado true)",
 );
 
+// calcula_virada_horario(): função pura extraída de gerar_notificacoes()
+// (023) — testável com horários fixos, sem depender da hora real em
+// que o teste roda.
+const virada30min = (
+  await db.query(`select * from calcula_virada_horario('11:00', '23:00', '22:30')`)
+).rows[0];
+console.log(
+  "Virada: exatamente 30 min antes de fechar já notifica:",
+  virada30min.aberta === true &&
+    virada30min.tipo_evento === "vai_fechar" &&
+    virada30min.minutos_restantes === 30,
+  "(esperado true)",
+);
+
+const virada31min = (
+  await db.query(`select * from calcula_virada_horario('11:00', '23:00', '22:29')`)
+).rows[0];
+console.log(
+  "Virada: 31 min antes de fechar ainda não notifica:",
+  virada31min.minutos_restantes === 31,
+  "(esperado true, minutos_restantes = 31)",
+);
+
+// Fechamento 23:00→02:00 (Pinheiros): antes da meia-noite, fechando
+// em 15 min; e antes de abrir, faltando 15 min pro turno seguinte.
+const viradaMadrugadaFechando = (
+  await db.query(`select * from calcula_virada_horario('18:00', '02:00', '01:45')`)
+).rows[0];
+console.log(
+  "Virada 18:00→02:00: 01:45 está aberta, fecha em 15 min:",
+  viradaMadrugadaFechando.aberta === true &&
+    viradaMadrugadaFechando.tipo_evento === "vai_fechar" &&
+    viradaMadrugadaFechando.minutos_restantes === 15,
+  "(esperado true)",
+);
+
+const viradaMadrugadaAbrindo = (
+  await db.query(`select * from calcula_virada_horario('18:00', '02:00', '17:45')`)
+).rows[0];
+console.log(
+  "Virada 18:00→02:00: 17:45 está fechada, abre em 15 min:",
+  viradaMadrugadaAbrindo.aberta === false &&
+    viradaMadrugadaAbrindo.tipo_evento === "vai_abrir" &&
+    viradaMadrugadaAbrindo.minutos_restantes === 15,
+  "(esperado true)",
+);
+
+if (
+  !virada30min.aberta ||
+  virada30min.minutos_restantes !== 30 ||
+  virada31min.minutos_restantes !== 31 ||
+  !viradaMadrugadaFechando.aberta ||
+  viradaMadrugadaFechando.minutos_restantes !== 15 ||
+  viradaMadrugadaAbrindo.aberta ||
+  viradaMadrugadaAbrindo.minutos_restantes !== 15
+) {
+  console.error("FAIL calcula_virada_horario()");
+  process.exit(1);
+}
+
+// Dedupe diário no fuso de SP: o BUG era usar a data-calendário pura
+// (dia_sao_paulo) — pra fechamento que cruza a meia-noite (ex.:
+// 23:40–00:10), o trecho antes e depois da virada caem em datas
+// diferentes e o índice não colide, gerando duas notificações pro
+// MESMO fechamento. dia_operacional_sao_paulo() desloca o corte pra
+// 04:00 — os dois lados da meia-noite caem no mesmo "dia operacional".
+//
+// notificar() sempre grava criado_em = now() (a hora real do teste),
+// então pra simular as duas metades cruzando a meia-noite é preciso
+// inserir cada linha separada e só DEPOIS mover criado_em pro horário
+// simulado via UPDATE — momento em que o índice único é reavaliado e
+// deve rejeitar a segunda linha, já que 23:50 de um dia e 00:05 do dia
+// seguinte caem no mesmo "dia operacional" (corte às 04:00).
+await db.query(`delete from notificacoes where unidade_id = 1 and tipo = 'vai_fechar'`);
+await db.query(
+  `select notificar(
+    '00000000-0000-0000-0000-000000000001', 1, 'vai_fechar', 'Centro vai fechar', 'Centro fecha em 20 min'
+  )`,
+);
+await db.query(
+  `update notificacoes set criado_em = '2024-01-15 23:50:00-03'
+   where unidade_id = 1 and tipo = 'vai_fechar'`,
+);
+await db.query(
+  `select notificar(
+    '00000000-0000-0000-0000-000000000001', 1, 'vai_fechar', 'Centro vai fechar', 'Centro fecha em 5 min'
+  )`,
+);
+
+let segundaMetadeBloqueada = false;
+try {
+  await db.query(
+    `update notificacoes set criado_em = '2024-01-16 00:05:00-03'
+     where unidade_id = 1 and tipo = 'vai_fechar' and mensagem = 'Centro fecha em 5 min'`,
+  );
+} catch {
+  segundaMetadeBloqueada = true;
+}
+console.log(
+  "Dedupe: fechamento que cruza a meia-noite não duplica:",
+  segundaMetadeBloqueada,
+  "(esperado true)",
+);
+if (!segundaMetadeBloqueada) {
+  console.error("FAIL dedupe vai_fechar cruzando meia-noite");
+  process.exit(1);
+}
+
 if (
   pedidoAposCron.status !== "cancelado" ||
   notifCancelAuto.length !== 2 ||
