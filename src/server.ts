@@ -3,6 +3,7 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { handleSimularPedido } from "./lib/order-simulator-handler";
+import { handleStatusRede } from "./lib/order-status-handler";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -50,6 +51,9 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/api/pedidos/simular") {
       return handleSimularPedido(request);
+    }
+    if (url.pathname === "/api/status") {
+      return handleStatusRede(request);
     }
 
     try {

@@ -98,6 +98,16 @@ await q(
   "rpc_avaliacoes_unidade(1) (3 linhas)",
   "select * from rpc_avaliacoes_unidade(1, current_date - 180, current_date) limit 3",
 );
+const statusRede = await q("rpc_status_rede()", "select * from rpc_status_rede()");
+console.log(
+  "rpc_status_rede(): só unidades ativas, cardápio é array:",
+  statusRede.every((u) => Array.isArray(u.cardapio)),
+  "(esperado true)",
+);
+if (!statusRede.every((u) => Array.isArray(u.cardapio))) {
+  console.error("FAIL rpc_status_rede()");
+  process.exit(1);
+}
 
 // Transições de status do pedido --------------------------------
 const [{ id: pedidoTeste }] = (
