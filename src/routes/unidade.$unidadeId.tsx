@@ -21,6 +21,7 @@ import { supabase } from "@/lib/supabase";
 import { CURRENCY_FULL } from "@/lib/currency";
 import { useUnidades, type UnidadeResumo } from "@/lib/use-unidades";
 import { minutosParaProximaVirada, useMinuteTick } from "@/lib/unidade-status";
+import { startPedidoPendenteAlarm } from "@/lib/notification-sound";
 
 type Plataforma = "ifood" | "rappi" | "proprio";
 
@@ -113,6 +114,22 @@ function HorarioBanner({ unidade }: { unidade: UnidadeResumo }) {
   );
 }
 
+function useTick(intervalMs: number) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((v) => v + 1), intervalMs);
+    return () => clearInterval(t);
+  }, [intervalMs]);
+  return tick;
+}
+
+function formatCountdown(seconds: number) {
+  const total = Math.max(0, Math.round(seconds));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 function UnitLayout() {
   const { unidadeId } = Route.useLoaderData();
   const { session, ready } = useSession();
@@ -185,6 +202,15 @@ function UnitLayout() {
   }, [unit?.id]);
 
   const currentPending = pendingQueue[0] ?? null;
+  const tick = useTick(1000);
+
+  // Alarme repetido enquanto o popup estiver na tela — para assim que o
+  // pedido é resolvido (aceito/recusado) ou a fila esvazia.
+  useEffect(() => {
+    if (!currentPending) return;
+    const stop = startPedidoPendenteAlarm();
+    return stop;
+  }, [currentPending?.id]);
 
   useEffect(() => {
     if (!currentPending) {
@@ -220,6 +246,18 @@ function UnitLayout() {
       setPendingQueue((prev) => prev.filter((p) => p.id !== currentPending.id));
     }
   }
+
+  // Gerente ignorou o popup além do tempo limite de aceite da unidade —
+  // recusa automaticamente pra não travar a fila indefinidamente.
+  useEffect(() => {
+    if (!currentPending || !unidade || resolvingPending) return;
+    const limiteMin = unidade.tempo_limite_aceite_min;
+    const elapsedMin = (Date.now() - new Date(currentPending.data_pedido).getTime()) / 60000;
+    if (elapsedMin >= limiteMin) {
+      handleResolverPendente("cancelado");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `tick` é o gatilho de recheck a cada segundo; handleResolverPendente/currentPending mudam junto com currentPending?.id
+  }, [tick, currentPending?.id, unidade?.tempo_limite_aceite_min, resolvingPending]);
 
   if (ready && session?.profile.role === "gerente" && session.profile.unidade_id == null) {
     return (
@@ -257,6 +295,12 @@ function UnitLayout() {
     );
   }
 
+  const remainingSeconds =
+    currentPending && unidade
+      ? unidade.tempo_limite_aceite_min * 60 -
+        (Date.now() - new Date(currentPending.data_pedido).getTime()) / 1000
+      : null;
+
   return (
     <AppShell>
       <UnitContext.Provider value={unit}>
@@ -279,6 +323,21 @@ function UnitLayout() {
                 )}
               </DialogDescription>
             </DialogHeader>
+
+            {remainingSeconds !== null && (
+              <div
+                className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium ${
+                  remainingSeconds <= 60
+                    ? "border-destructive/30 bg-destructive/10 text-destructive"
+                    : "border-border bg-accent-tint text-accent-tint-foreground"
+                }`}
+              >
+                <Clock className="size-3.5 shrink-0" />
+                {remainingSeconds > 0
+                  ? `Recusa automática em ${formatCountdown(remainingSeconds)}`
+                  : "Recusando automaticamente…"}
+              </div>
+            )}
 
             <div className="max-h-64 space-y-2 overflow-auto">
               {pendingItens.length === 0 ? (

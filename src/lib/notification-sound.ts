@@ -35,3 +35,13 @@ export function playHorarioAlertSound() {
   if (localStorage.getItem("sabor-cia-som-avisos-horario") === "false") return;
   beep(660);
 }
+
+// Alarme repetido enquanto o popup de pedido pendente estiver na tela —
+// um beep único passa despercebido se o gerente estiver longe da tela.
+// Retorna a função que para o alarme (chamar ao aceitar/recusar/desmontar).
+export function startPedidoPendenteAlarm(): () => void {
+  if (typeof window === "undefined") return () => {};
+  playNotificationSound();
+  const interval = window.setInterval(playNotificationSound, 2500);
+  return () => window.clearInterval(interval);
+}
