@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { LogOut, MapPin, Calendar, CircleDot, Clock, Timer } from "lucide-react";
+import { LogOut, MapPin, Calendar, CircleDot, Clock, Timer, Target } from "lucide-react";
 import { TopBar } from "@/components/top-bar";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,9 +12,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/lib/supabase";
-import { signOut } from "@/lib/auth";
+import { signOut, useSession } from "@/lib/auth";
 import { useUnit } from "@/lib/unit-context";
 import { applyTheme, getStoredTheme, type Theme } from "@/lib/theme";
+import { CURRENCY_FULL } from "@/lib/currency";
+import { cn } from "@/lib/utils";
 
 type UnidadeDetalhe = {
   nome: string;
@@ -32,10 +34,72 @@ export const Route = createFileRoute("/unidade/$unidadeId/configuracoes")({
   component: ConfiguracoesPage,
 });
 
+type MetaMes = {
+  mesReferencia: string; // "YYYY-MM-01"
+  metaReceita: string; // dígitos crus do input mascarado (centavos)
+  metaPedidos: string;
+};
+
+const MESES_PT = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
+
+// offset em meses a partir do mês corrente (0 = este mês, -1 = mês
+// passado, 1 = mês que vem) — sempre dia 1, formato que o Postgres
+// aceita direto pra comparar com mes_referencia.
+function mesReferenciaOffset(offset: number) {
+  const hoje = new Date();
+  const d = new Date(hoje.getFullYear(), hoje.getMonth() + offset, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function mesLabel(mesReferenciaIso: string) {
+  const [ano, mes] = mesReferenciaIso.split("-").map(Number);
+  return `${MESES_PT[mes - 1]} de ${ano}`;
+}
+
+function centavosParaReais(centavos: string) {
+  return (Number(centavos || "0") / 100).toFixed(2);
+}
+
+// Máscara de moeda: guarda só os dígitos (centavos) e formata pra
+// exibição — sem depender de libs externas de máscara.
+function CurrencyMaskInput({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (centavos: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Input
+      inputMode="numeric"
+      value={CURRENCY_FULL.format(Number(centavosParaReais(value)))}
+      onChange={(e) => onChange(e.target.value.replace(/\D/g, ""))}
+      disabled={disabled}
+    />
+  );
+}
+
 function ConfiguracoesPage() {
   const unit = useUnit();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { session } = useSession();
+  const isGestor = session?.profile.role === "gestor_geral";
   const [detalhe, setDetalhe] = useState<UnidadeDetalhe | null>(null);
   const [tema, setTema] = useState<Theme>("dark");
   const [somPedido, setSomPedido] = useState(true);
@@ -46,6 +110,16 @@ function ConfiguracoesPage() {
   const [tempoLimiteAceite, setTempoLimiteAceite] = useState("5");
   const [limiteAtraso, setLimiteAtraso] = useState("20");
   const [salvandoConfigPedidos, setSalvandoConfigPedidos] = useState(false);
+  const [metasLoading, setMetasLoading] = useState(true);
+  const [metasHistorico, setMetasHistorico] = useState<MetaMes[]>([]);
+  const [metasEditaveis, setMetasEditaveis] = useState<MetaMes[]>([]);
+  const [salvandoMetas, setSalvandoMetas] = useState(false);
+
+  // Gestor: histórico (3 meses passados, read-only) + atual e os 2
+  // próximos (editáveis, upsert). Gerente: só o mês atual, read-only —
+  // meta é decisão da rede, não da unidade (ver Fase 3 do design).
+  const offsetsHistorico = useMemo(() => (isGestor ? [-3, -2, -1] : []), [isGestor]);
+  const offsetsEditaveis = useMemo(() => (isGestor ? [0, 1, 2] : [0]), [isGestor]);
 
   useEffect(() => {
     setTema(getStoredTheme());
@@ -124,6 +198,94 @@ function ConfiguracoesPage() {
         : prev,
     );
     queryClient.invalidateQueries({ queryKey: ["unidades"] });
+  }
+
+  useEffect(() => {
+    let active = true;
+    setMetasLoading(true);
+    const offsets = [...offsetsHistorico, ...offsetsEditaveis];
+    const mesInicio = mesReferenciaOffset(offsets[0]);
+    const mesFim = mesReferenciaOffset(offsets[offsets.length - 1]);
+
+    supabase
+      .from("metas")
+      .select("mes_referencia, meta_receita, meta_pedidos")
+      .eq("unidade_id", unit.id)
+      .gte("mes_referencia", mesInicio)
+      .lte("mes_referencia", mesFim)
+      .then(({ data }) => {
+        if (!active) return;
+        const porMes = new Map(
+          (data ?? []).map((m) => [
+            m.mes_referencia,
+            {
+              metaReceita: String(Math.round(m.meta_receita * 100)),
+              metaPedidos: String(m.meta_pedidos),
+            },
+          ]),
+        );
+        const linha = (offset: number): MetaMes => {
+          const mesReferencia = mesReferenciaOffset(offset);
+          const existente = porMes.get(mesReferencia);
+          return {
+            mesReferencia,
+            metaReceita: existente?.metaReceita ?? "",
+            metaPedidos: existente?.metaPedidos ?? "",
+          };
+        };
+        setMetasHistorico(offsetsHistorico.map(linha));
+        setMetasEditaveis(offsetsEditaveis.map(linha));
+        setMetasLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- offsetsHistorico/offsetsEditaveis são arrays recriados a cada render por useMemo; isGestor (que decide o conteúdo deles) já está no array de deps
+  }, [unit.id, isGestor]);
+
+  function atualizarMetaEditavel(
+    mesReferencia: string,
+    campo: "metaReceita" | "metaPedidos",
+    valor: string,
+  ) {
+    setMetasEditaveis((prev) =>
+      prev.map((m) => (m.mesReferencia === mesReferencia ? { ...m, [campo]: valor } : m)),
+    );
+  }
+
+  async function handleSalvarMetas() {
+    const paraSalvar = metasEditaveis.filter((m) => m.metaReceita || m.metaPedidos);
+    for (const m of paraSalvar) {
+      const receita = Number(centavosParaReais(m.metaReceita));
+      const pedidos = Number(m.metaPedidos || "0");
+      if (!(receita > 0) || !Number.isInteger(pedidos) || pedidos <= 0) {
+        toast.error(
+          `Meta de ${mesLabel(m.mesReferencia)} precisa ter receita e pedidos maiores que zero`,
+        );
+        return;
+      }
+    }
+
+    setSalvandoMetas(true);
+    const { error } = await supabase.from("metas").upsert(
+      paraSalvar.map((m) => ({
+        unidade_id: unit.id,
+        mes_referencia: m.mesReferencia,
+        meta_receita: Number(centavosParaReais(m.metaReceita)),
+        meta_pedidos: Number(m.metaPedidos),
+      })),
+      { onConflict: "unidade_id,mes_referencia" },
+    );
+    setSalvandoMetas(false);
+    if (error) {
+      toast.error("Não foi possível salvar as metas", { description: error.message });
+      return;
+    }
+    toast.success("Metas atualizadas");
+    // Dashboards da unidade e da rede buscam KPIs direto no useEffect
+    // deles a cada montagem (não passam por react-query) — não há
+    // cache pra invalidar; a próxima visita já vem com o dado novo.
   }
 
   function handleToggleTema(escuro: boolean) {
@@ -292,6 +454,99 @@ function ConfiguracoesPage() {
                   Salvar configurações de pedidos
                 </Button>
               </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 font-display text-base">
+              <Target className="size-4 text-primary" />
+              Metas do mês
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {metasLoading ? (
+              <Skeleton className="h-16 w-full" />
+            ) : isGestor ? (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Meta é decisão da rede — edite o mês atual e os próximos. Meses passados ficam
+                  como histórico, só leitura.
+                </p>
+                {metasEditaveis.map((m) => (
+                  <div key={m.mesReferencia} className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">
+                        {mesLabel(m.mesReferencia)} · Receita
+                      </Label>
+                      <CurrencyMaskInput
+                        value={m.metaReceita}
+                        onChange={(v) => atualizarMetaEditavel(m.mesReferencia, "metaReceita", v)}
+                        disabled={salvandoMetas}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Pedidos</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={m.metaPedidos}
+                        onChange={(e) =>
+                          atualizarMetaEditavel(m.mesReferencia, "metaPedidos", e.target.value)
+                        }
+                        disabled={salvandoMetas}
+                      />
+                    </div>
+                  </div>
+                ))}
+                <Button
+                  size="sm"
+                  onClick={handleSalvarMetas}
+                  disabled={salvandoMetas}
+                  className="w-full sm:w-auto"
+                >
+                  Salvar metas
+                </Button>
+
+                {metasHistorico.some((m) => m.metaReceita) && (
+                  <div className="space-y-1.5 border-t border-border pt-3">
+                    <p className="text-[11px] text-muted-foreground">Histórico</p>
+                    {metasHistorico
+                      .filter((m) => m.metaReceita)
+                      .map((m) => (
+                        <div
+                          key={m.mesReferencia}
+                          className="flex items-center justify-between text-xs text-muted-foreground"
+                        >
+                          <span>{mesLabel(m.mesReferencia)}</span>
+                          <span className="font-mono tabular-nums">
+                            {CURRENCY_FULL.format(Number(centavosParaReais(m.metaReceita)))} ·{" "}
+                            {m.metaPedidos} pedidos
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className={cn("space-y-1", !metasEditaveis[0]?.metaReceita && "opacity-60")}>
+                <p className="text-xs text-muted-foreground">
+                  {mesLabel(metasEditaveis[0]?.mesReferencia ?? mesReferenciaOffset(0))}
+                </p>
+                {metasEditaveis[0]?.metaReceita ? (
+                  <p className="font-mono text-lg font-semibold tabular-nums">
+                    {CURRENCY_FULL.format(Number(centavosParaReais(metasEditaveis[0].metaReceita)))}
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      {metasEditaveis[0].metaPedidos} pedidos
+                    </span>
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    A rede ainda não definiu a meta deste mês.
+                  </p>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>

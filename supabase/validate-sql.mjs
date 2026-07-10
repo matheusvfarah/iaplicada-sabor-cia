@@ -153,6 +153,7 @@ await db.exec(`
   grant update (tempo_limite_aceite_min, limite_atraso_min) on unidades to test_gestor, test_gerente;
   grant update (lida, lida_em) on notificacoes to test_gestor, test_gerente;
   grant insert, update, delete on funcionarios to test_gestor, test_gerente;
+  grant insert, update on metas to test_gestor, test_gerente;
   grant execute on all functions in schema public to test_gestor, test_gerente;
 `);
 
@@ -696,6 +697,83 @@ if (
   !emailDuplicadoBloqueado
 ) {
   console.error("FAIL RLS funcionarios");
+  process.exit(1);
+}
+
+// Metas: só gestor_geral edita, e nunca mês passado -------------
+let gestorEditaMesAtual = false;
+try {
+  await db.exec(`set role test_gestor; set app.uid = '00000000-0000-0000-0000-000000000001';`);
+  const r = await db.query(
+    `insert into metas (unidade_id, mes_referencia, meta_receita, meta_pedidos)
+     values (1, date_trunc('month', current_date)::date, 50000, 700)
+     on conflict (unidade_id, mes_referencia)
+     do update set meta_receita = excluded.meta_receita, meta_pedidos = excluded.meta_pedidos
+     returning meta_receita`,
+  );
+  gestorEditaMesAtual = r.rows.length === 1 && Number(r.rows[0].meta_receita) === 50000;
+  await db.exec("reset role; reset app.uid;");
+} catch (e) {
+  console.error("FAIL: gestor deveria poder editar a meta do mês atual ->", e.message);
+}
+console.log("Metas: gestor edita meta do mês atual:", gestorEditaMesAtual, "(esperado true)");
+
+let gestorCriaMesFuturo = false;
+try {
+  await db.exec(`set role test_gestor; set app.uid = '00000000-0000-0000-0000-000000000001';`);
+  const r = await db.query(
+    `insert into metas (unidade_id, mes_referencia, meta_receita, meta_pedidos)
+     values (1, (date_trunc('month', current_date) + interval '1 month')::date, 55000, 720)
+     returning id`,
+  );
+  gestorCriaMesFuturo = r.rows.length === 1;
+  await db.exec("reset role; reset app.uid;");
+} catch (e) {
+  console.error("FAIL: gestor deveria poder criar meta de mês futuro ->", e.message);
+}
+console.log("Metas: gestor cria meta de mês futuro:", gestorCriaMesFuturo, "(esperado true)");
+
+let gestorBloqueadoMesPassado = false;
+try {
+  await db.exec(`set role test_gestor; set app.uid = '00000000-0000-0000-0000-000000000001';`);
+  await db.query(
+    `update metas set meta_receita = 1
+     where unidade_id = 1 and mes_referencia = (date_trunc('month', current_date) - interval '1 month')::date`,
+  );
+} catch {
+  gestorBloqueadoMesPassado = true;
+} finally {
+  await db.exec("reset role; reset app.uid;");
+}
+console.log("Metas: gestor NÃO edita mês passado:", gestorBloqueadoMesPassado, "(esperado true)");
+
+// Sem exceção: a policy usa USING (não WITH CHECK) pro role, então o
+// gerente só filtra 0 linhas em vez de levar erro — testa a contagem.
+let gerenteBloqueadoMeta = false;
+try {
+  await db.exec(`set role test_gerente; set app.uid = '00000000-0000-0000-0000-000000000002';`);
+  const r = await db.query(
+    `update metas set meta_receita = 1
+     where unidade_id = 1 and mes_referencia = date_trunc('month', current_date)::date
+     returning id`,
+  );
+  gerenteBloqueadoMeta = r.rows.length === 0;
+} finally {
+  await db.exec("reset role; reset app.uid;");
+}
+console.log(
+  "Metas: gerente NÃO edita (só gestor decide meta):",
+  gerenteBloqueadoMeta,
+  "(esperado true)",
+);
+
+if (
+  !gestorEditaMesAtual ||
+  !gestorCriaMesFuturo ||
+  !gestorBloqueadoMesPassado ||
+  !gerenteBloqueadoMeta
+) {
+  console.error("FAIL RLS metas");
   process.exit(1);
 }
 
