@@ -918,4 +918,62 @@ if (sorteioVelho.avaliacao_sorteada !== true || sorteioRecente.avaliacao_sortead
   process.exit(1);
 }
 
+// rpc_metas_em_risco() (031): smoke test — a query depende de
+// current_date (dias_restantes) pra decidir o que é "em risco", então
+// não dá pra afirmar um resultado fixo aqui sem mockar o relógio; só
+// garante que roda sem erro e devolve as colunas esperadas.
+const metasEmRisco = await db.query("select * from rpc_metas_em_risco()");
+console.log(
+  "rpc_metas_em_risco(): executa sem erro:",
+  Array.isArray(metasEmRisco.rows),
+  "(esperado true, veio",
+  metasEmRisco.rows.length,
+  "unidade(s) em risco agora)",
+);
+
+// rpc_registrar_alerta_meta() (031): idempotente — mesma unidade no
+// mesmo mês só registra uma vez, mesmo chamando de novo (o n8n pode
+// rodar o workflow mais de uma vez no mesmo dia sem duplicar alerta).
+const [{ id: unidadeTesteMeta }] = (
+  await db.query(
+    `insert into unidades (nome, endereco, status, data_abertura)
+     values ('Unidade Teste Meta', 'Rua Teste, 1', 'ativa', current_date)
+     returning id`,
+  )
+).rows;
+
+const primeiroRegistro = await db.query(
+  `select rpc_registrar_alerta_meta(${unidadeTesteMeta}, 'Meta em risco (teste)', '{"pct_meta": 40}'::jsonb) as id`,
+);
+console.log(
+  "rpc_registrar_alerta_meta(): primeira chamada registra o alerta:",
+  primeiroRegistro.rows[0].id !== null,
+  "(esperado true)",
+);
+
+const segundoRegistro = await db.query(
+  `select rpc_registrar_alerta_meta(${unidadeTesteMeta}, 'Meta em risco (teste, de novo)', '{"pct_meta": 40}'::jsonb) as id`,
+);
+console.log(
+  "rpc_registrar_alerta_meta(): segunda chamada no mesmo mês não duplica:",
+  segundoRegistro.rows[0].id === null,
+  "(esperado true)",
+);
+
+const alertasMetaTeste = (
+  await db.query(
+    `select count(*)::int as n from alertas where unidade_id = ${unidadeTesteMeta} and tipo = 'meta'`,
+  )
+).rows[0].n;
+console.log(
+  "rpc_registrar_alerta_meta(): só existe 1 linha em alertas pra unidade/mês:",
+  alertasMetaTeste === 1,
+  "(esperado true)",
+);
+
+if (primeiroRegistro.rows[0].id === null || segundoRegistro.rows[0].id !== null || alertasMetaTeste !== 1) {
+  console.error("FAIL rpc_registrar_alerta_meta(): dedupe não está funcionando");
+  process.exit(1);
+}
+
 console.log("\nTUDO OK — migrations, seed, trigger, RPCs e RLS validados.");

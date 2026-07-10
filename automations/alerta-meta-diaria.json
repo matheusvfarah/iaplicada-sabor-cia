@@ -12,37 +12,51 @@
           ]
         }
       },
-      "id": "b1b1b1b1-0001-4000-8000-000000000001",
+      "id": "d1d1d1d1-0001-4000-8000-000000000001",
       "name": "Todo dia às 08:00",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-400, 0]
+      "position": [-600, 0]
     },
     {
       "parameters": {
-        "operation": "executeQuery",
-        "query": "select\n  v.unidade_id,\n  v.unidade_nome,\n  v.meta_receita,\n  v.receita_acumulada,\n  round(v.pct_meta * 100, 1) as pct_meta,\n  v.dias_restantes\nfrom v_alerta_metas v\nwhere v.pct_meta < 0.6\n  and v.dias_restantes <= 10\n  and not exists (\n    select 1 from alertas a\n    where a.unidade_id = v.unidade_id\n      and a.tipo = 'meta'\n      and a.criado_em >= date_trunc('month', now() at time zone 'America/Sao_Paulo')\n  );",
+        "method": "GET",
+        "url": "https://iaplicada-sabor-cia.vercel.app/api/alertas/metas-em-risco",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "options": {}
       },
-      "id": "b1b1b1b1-0002-4000-8000-000000000002",
-      "name": "Unidades em risco (com dedupe)",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [-160, 0],
+      "id": "d1d1d1d1-0002-4000-8000-000000000002",
+      "name": "Consulta unidades em risco",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-380, 0],
       "credentials": {
-        "postgres": {
-          "name": "Supabase Sabor & Cia (Postgres)"
+        "httpHeaderAuth": {
+          "id": "metas-alert-secret",
+          "name": "Metas Alert Secret"
         }
       }
     },
     {
       "parameters": {
+        "jsCode": "// GET devolve { unidades: [...] } — vira 1 item por unidade em\n// risco pros próximos nodes processarem individualmente. Lista\n// vazia (ninguém em risco hoje) ⇒ zero itens ⇒ cadeia para aqui,\n// nenhum e-mail sai.\nreturn ($input.first().json.unidades || []).map((u) => ({ json: u }));"
+      },
+      "id": "d1d1d1d1-0003-4000-8000-000000000003",
+      "name": "Explode unidades em risco",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, 0]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
             { "name": "anthropic-version", "value": "2023-06-01" },
             { "name": "content-type", "value": "application/json" }
           ]
@@ -52,54 +66,85 @@
         "jsonBody": "={{ JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 350, messages: [{ role: 'user', content: 'Você é analista de operações de uma rede de dark kitchens. A unidade \"' + $json.unidade_nome + '\" está com receita acumulada de R$ ' + $json.receita_acumulada + ' contra meta mensal de R$ ' + $json.meta_receita + ' (' + $json.pct_meta + '% da meta), faltando ' + $json.dias_restantes + ' dias para o fim do mês. Escreva um diagnóstico de no máximo 4 linhas em português: 1 frase de situação, 1 hipótese provável de causa e 1 ação prática recomendada para os próximos dias. Tom direto, sem saudação, sem markdown.' }] }) }}",
         "options": {}
       },
-      "id": "b1b1b1b1-0003-4000-8000-000000000003",
+      "id": "d1d1d1d1-0004-4000-8000-000000000004",
       "name": "Diagnóstico via Claude",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [80, 0]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Junta o diagnóstico do Claude com os KPIs da unidade\nconst risco = $(\"Unidades em risco (com dedupe)\").all();\nconst respostas = $input.all();\n\nreturn respostas.map((r, i) => {\n  const kpis = risco[i].json;\n  const diagnostico = (r.json.content?.[0]?.text || '').trim()\n    || `Unidade ${kpis.unidade_nome} em ${kpis.pct_meta}% da meta com ${kpis.dias_restantes} dias restantes.`;\n  return { json: { ...kpis, diagnostico } };\n});"
-      },
-      "id": "b1b1b1b1-0004-4000-8000-000000000004",
-      "name": "Prepara alerta",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [320, 0]
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "insert into alertas (unidade_id, tipo, mensagem, payload)\nvalues ($1, 'meta', $2, $3::jsonb)\nreturning id;",
-        "options": {
-          "queryReplacement": "={{ [$json.unidade_id, $json.diagnostico, JSON.stringify({ meta_receita: $json.meta_receita, receita_acumulada: $json.receita_acumulada, pct_meta: $json.pct_meta, dias_restantes: $json.dias_restantes })] }}"
-        }
-      },
-      "id": "b1b1b1b1-0005-4000-8000-000000000005",
-      "name": "Registra em alertas",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [560, 0],
+      "position": [60, 0],
       "credentials": {
-        "postgres": {
-          "name": "Supabase Sabor & Cia (Postgres)"
+        "httpHeaderAuth": {
+          "id": "anthropic-api-key",
+          "name": "Anthropic API Key"
         }
       }
     },
     {
       "parameters": {
-        "fromEmail": "alertas@saborecia.com.br",
-        "toEmail": "={{ $env.EMAIL_GESTOR }}",
-        "subject": "=[Sabor & Cia] Meta em risco — {{ $json.unidade_nome }}",
-        "text": "={{ $json.diagnostico }}\n\nReceita acumulada: R$ {{ $json.receita_acumulada }}\nMeta do mês: R$ {{ $json.meta_receita }} ({{ $json.pct_meta }}%)\nDias restantes: {{ $json.dias_restantes }}",
+        "jsCode": "// Junta o diagnóstico do Claude com os KPIs da unidade (mesmo\n// índice de item = mesma unidade, pareamento automático do n8n).\n// Se a Claude API falhar/vier vazia, cai no fallback factual — o\n// alerta nunca deixa de sair por causa da IA.\nconst kpis = $(\"Explode unidades em risco\").item.json;\nconst diagnostico = ($json.content?.[0]?.text || '').trim()\n  || `Unidade ${kpis.unidade_nome} em ${kpis.pct_meta}% da meta com ${kpis.dias_restantes} dias restantes.`;\nreturn { json: { ...kpis, diagnostico } };"
+      },
+      "id": "d1d1d1d1-0005-4000-8000-000000000005",
+      "name": "Prepara alerta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [280, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://iaplicada-sabor-cia.vercel.app/api/alertas/metas",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ unidade_id: $json.unidade_id, mensagem: $json.diagnostico, payload: { meta_receita: $json.meta_receita, receita_acumulada: $json.receita_acumulada, pct_meta: $json.pct_meta, dias_restantes: $json.dias_restantes } }) }}",
         "options": {}
       },
-      "id": "b1b1b1b1-0006-4000-8000-000000000006",
-      "name": "E-mail ao gestor",
+      "id": "d1d1d1d1-0006-4000-8000-000000000006",
+      "name": "Registra alerta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "metas-alert-secret",
+          "name": "Metas Alert Secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ja_registrado }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d1d1d1d1-0007-4000-8000-000000000007",
+      "name": "Alerta é novo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [720, 0]
+    },
+    {
+      "parameters": {
+        "fromEmail": "alertas@saborecia.com.br",
+        "toEmail": "alertas-teste@saborecia.com.br",
+        "subject": "=[Sabor & Cia] Meta em risco — {{ $('Prepara alerta').item.json.unidade_nome }}",
+        "text": "={{ $('Prepara alerta').item.json.diagnostico }}\n\nReceita acumulada: R$ {{ $('Prepara alerta').item.json.receita_acumulada }}\nMeta do mês: R$ {{ $('Prepara alerta').item.json.meta_receita }} ({{ $('Prepara alerta').item.json.pct_meta }}%)\nDias restantes: {{ $('Prepara alerta').item.json.dias_restantes }}",
+        "options": {}
+      },
+      "id": "d1d1d1d1-0008-4000-8000-000000000008",
+      "name": "E-mail fictício ao gestor",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
-      "position": [800, 0],
+      "position": [940, 0],
       "credentials": {
         "smtp": {
           "name": "SMTP Sabor & Cia"
@@ -109,19 +154,25 @@
   ],
   "connections": {
     "Todo dia às 08:00": {
-      "main": [[{ "node": "Unidades em risco (com dedupe)", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Consulta unidades em risco", "type": "main", "index": 0 }]]
     },
-    "Unidades em risco (com dedupe)": {
+    "Consulta unidades em risco": {
+      "main": [[{ "node": "Explode unidades em risco", "type": "main", "index": 0 }]]
+    },
+    "Explode unidades em risco": {
       "main": [[{ "node": "Diagnóstico via Claude", "type": "main", "index": 0 }]]
     },
     "Diagnóstico via Claude": {
       "main": [[{ "node": "Prepara alerta", "type": "main", "index": 0 }]]
     },
     "Prepara alerta": {
-      "main": [[{ "node": "Registra em alertas", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Registra alerta", "type": "main", "index": 0 }]]
     },
-    "Registra em alertas": {
-      "main": [[{ "node": "E-mail ao gestor", "type": "main", "index": 0 }]]
+    "Registra alerta": {
+      "main": [[{ "node": "Alerta é novo?", "type": "main", "index": 0 }]]
+    },
+    "Alerta é novo?": {
+      "main": [[{ "node": "E-mail fictício ao gestor", "type": "main", "index": 0 }]]
     }
   },
   "settings": {

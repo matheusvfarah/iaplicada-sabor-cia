@@ -4,6 +4,7 @@ import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { handleSimularPedido } from "./lib/order-simulator-handler";
 import { handleStatusRede } from "./lib/order-status-handler";
+import { handleMetasEmRisco, handleRegistrarAlertaMeta } from "./lib/alertas-metas-handler";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -54,6 +55,12 @@ export default {
     }
     if (url.pathname === "/api/status") {
       return handleStatusRede(request);
+    }
+    if (url.pathname === "/api/alertas/metas-em-risco") {
+      return handleMetasEmRisco(request);
+    }
+    if (url.pathname === "/api/alertas/metas") {
+      return handleRegistrarAlertaMeta(request);
     }
 
     try {

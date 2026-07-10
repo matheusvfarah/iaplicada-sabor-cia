@@ -1,21 +1,44 @@
 # Automações (n8n Cloud)
 
-Dois workflows exportados como JSON (`Workflows → Import from File` no n8n):
+Dois workflows exportados como JSON (`Workflows → Import from File` no n8n). Nenhum dos dois usa variáveis de ambiente do n8n (`$env.*`) nem conecta direto no Postgres — o plano do n8n usado aqui não libera acesso a env vars, então todo segredo é uma **Credential** (Header Auth/SMTP) e todo acesso a dado é um **HTTP Request na própria API do app**, nunca um node Postgres.
 
 | Workflow                                                | Gatilho                                   | Descrição                                                                                                                   |
 | -------------------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| [`alerta-meta-diaria.json`](./alerta-meta-diaria.json) | Schedule (08:00 America/Sao_Paulo)        | **Requisito do teste.** Consulta `v_alerta_metas`, gera diagnóstico via Claude API e insere em `alertas` + e-mail ao gestor |
+| [`alerta-meta-diaria.json`](./alerta-meta-diaria.json) | Schedule (08:00 America/Sao_Paulo)        | **Requisito do teste.** GET na API do app pra saber quais unidades estão em risco, diagnóstico via Claude, registra o alerta via POST na API e manda e-mail (fictício) ao gestor |
 | [`simulador-pedidos.json`](./simulador-pedidos.json)   | Schedule (curto, com sorteio de execução) | Simula pedidos chegando pela mesma API que um integrador real usaria (adicional, fora do requisito)                        |
 
 Avaliação ruim, atraso de pedido e cancelamento automático **não dependem de n8n** — rodam direto no banco via `pg_cron` (ver seção "Cron no banco" abaixo). Não há workflow n8n pra eles.
 
 ## WF1 — `alerta-meta-diaria` (requisito + IA)
 
-Fluxo: **Schedule 08:00** → **Postgres**: query em `v_alerta_metas` filtrando `pct_meta < 0.6 and dias_restantes <= 10`, com dedupe embutido no SQL (`not exists` em `alertas` tipo `meta` do mês corrente — um alerta por unidade/mês, mesmo rodando todo dia) → **HTTP**: Claude API gera diagnóstico de 4 linhas (situação, hipótese de causa, ação recomendada) a partir dos KPIs → **Postgres**: insere em `alertas` (aparece no sino/painel do gestor via realtime) → **E-mail** ao gestor.
+Fluxo: **Schedule 08:00** → **HTTP GET** `/api/alertas/metas-em-risco` (retorna as unidades com `pct_meta < 0.6` e `dias_restantes <= 10`, já sem quem recebeu alerta esse mês — dedupe embutido na consulta) → **Code**: explode a lista em 1 item por unidade → **HTTP POST** à Claude API, gera diagnóstico de 4 linhas (situação, hipótese de causa, ação recomendada) a partir dos KPIs → **Code**: junta diagnóstico + KPIs (fallback factual se a Claude falhar) → **HTTP POST** `/api/alertas/metas` (registra o alerta; idempotente — se já tiver alerta da mesma unidade nesse mês, não duplica, só devolve `ja_registrado: true`) → **IF**: só segue se o registro foi novo → **E-mail fictício** ao gestor.
 
-Racional: o requisito pede "envie um alerta"; entregamos o alerta com diagnóstico gerado por IA — coerente com o posicionamento da IAplicada. Se a Claude API falhar, o node "Prepara alerta" tem fallback com mensagem factual sem IA (o alerta nunca deixa de sair).
+O n8n nunca toca o Postgres: as duas rotas HTTP (`GET /api/alertas/metas-em-risco`, `POST /api/alertas/metas`) rodam no servidor do app com a `service_role` key (`src/lib/alertas-metas-handler.ts`), igual ao padrão já usado pelo simulador de pedidos (`/api/status`, `/api/pedidos/simular`). A tabela `alertas` no banco continua sendo o destino final (aparece no painel `/rede/alertas` do gestor), só que quem escreve nela é o app, não o n8n.
 
-**Demo:** o seed deixa a unidade Santana abaixo de 60% da meta. Como o gatilho de dias (`dias_restantes <= 10`) pode não bater no dia da avaliação, execute manualmente (`Execute Workflow`) após ajustar temporariamente o filtro para `dias_restantes <= 31`, ou aguarde a janela real.
+Racional: o requisito pede "envie um alerta"; entregamos o alerta com diagnóstico gerado por IA — coerente com o posicionamento da IAplicada. Se a Claude API falhar, o node "Prepara alerta" tem fallback com mensagem factual sem IA (o alerta nunca deixa de sair). O e-mail é fictício (endereço de teste hardcoded no node) — trocar pelo endereço real do gestor em produção.
+
+**Demo:** o seed deixa a unidade Santana abaixo de 60% da meta. Como o gatilho de dias (`dias_restantes <= 10`) pode não bater no dia da avaliação, ajuste temporariamente o filtro em `rpc_metas_em_risco()` (`supabase/migrations/20260724000031_rpc_alertas_metas.sql`) para `dias_restantes <= 31` e rode o workflow manualmente (`Execute Workflow`), ou aguarde a janela real do mês.
+
+### Endpoints usados pelo WF1
+
+**`GET /api/alertas/metas-em-risco`** — header `x-webhook-secret: <METAS_ALERT_SECRET>`. Chama a RPC `rpc_metas_em_risco()` e devolve:
+
+```json
+{
+  "unidades": [
+    {
+      "unidade_id": 3,
+      "unidade_nome": "Santana",
+      "meta_receita": 50000,
+      "receita_acumulada": 18000,
+      "pct_meta": 36.0,
+      "dias_restantes": 7
+    }
+  ]
+}
+```
+
+**`POST /api/alertas/metas`** — mesmo header, corpo `{ "unidade_id": 3, "mensagem": "...", "payload": {...} }`. Chama `rpc_registrar_alerta_meta()`, que já faz o dedupe (não exists alerta tipo `meta` da mesma unidade nesse mês) antes de inserir. Respostas: `201 { "id": 42 }` quando registra; `200 { "id": null, "ja_registrado": true }` quando já existia (idempotente — pode rodar o workflow mais de uma vez no mesmo dia sem duplicar alerta nem e-mail).
 
 ## Cron no banco (sem n8n): atraso, cancelamento e avaliação simulada
 
@@ -33,23 +56,24 @@ select cron.schedule('simular_avaliacoes', '* * * * *', 'select simular_avaliaco
 
 Isso já estava ativo antes de qualquer workflow n8n dedicado a isso ter sido cogitado — os workflows n8n que existiam pra isso (`gerar-notificacoes.json`, `alerta-avaliacao-ruim.json`) foram removidos do repo porque adicionavam uma dependência externa desnecessária pra algo que o próprio Postgres já resolve sozinho, de forma mais simples e sem custo de infraestrutura extra.
 
-## Credenciais e variáveis (n8n)
+## Credenciais (n8n)
 
-Criar após importar (os JSONs referenciam por nome, nunca hardcoded):
+Criar após importar (os JSONs referenciam por nome, nunca hardcoded, e nenhum secret fica salvo no JSON exportado):
 
-| Credencial/variável | Uso |
-| --- | --- |
-| Credencial Postgres `Supabase Sabor & Cia (Postgres)` | WF1 (host/porta/senha do Supabase → Database Settings; usar o pooler em `Session mode`) |
-| Credencial SMTP `SMTP Sabor & Cia` | node de e-mail (qualquer SMTP de teste; Mailtrap serve para a demo) |
-| `ANTHROPIC_API_KEY` | WF1 — diagnóstico via Claude |
-| `EMAIL_GESTOR` | destinatário dos alertas |
-| `APP_URL` + `ORDER_SIMULATOR_SECRET` | WF3 — ver seção do simulador |
+| Credencial | Tipo | Uso |
+| --- | --- | --- |
+| `Metas Alert Secret` | Header Auth (`x-webhook-secret: <METAS_ALERT_SECRET>`) | WF1 — GET e POST na API de alertas de meta |
+| `Anthropic API Key` | Header Auth (`x-api-key: <ANTHROPIC_API_KEY>`) | WF1 — diagnóstico via Claude |
+| `SMTP Sabor & Cia` | SMTP | WF1 — e-mail fictício ao gestor (qualquer SMTP de teste; Mailtrap serve pra demo) |
+| `Sabor e Cia` (Header Auth, `x-webhook-secret: <ORDER_SIMULATOR_SECRET>`) | Header Auth | WF3 — ver seção do simulador |
+
+`METAS_ALERT_SECRET` é uma variável de ambiente **do app** (Vercel), não do n8n — configurada em `.env`/`.env.example` e lida por `src/lib/alertas-metas-handler.ts` no servidor. O n8n só guarda o mesmo valor dentro da Credential, nunca como env var.
 
 ## Produção (como eu configuraria de verdade)
 
-- **Credenciais** sempre em credentials/variáveis do n8n — os JSONs do repo não contêm nenhum secret.
+- **Credenciais** sempre em Credentials do n8n — os JSONs do repo não contêm nenhum secret.
 - **Error workflow** global: capturar falha de qualquer node → notificar canal de ops; HTTP nodes com retry (2x, backoff) para instabilidade de rede.
-- **Dedupe** no banco (SQL), não em memória do n8n — sobrevive a restart e a execuções concorrentes.
+- **Dedupe** no banco (SQL, via `rpc_registrar_alerta_meta`), não em memória do n8n — sobrevive a restart e a execuções concorrentes, e deixa o workflow seguro pra rodar mais de uma vez sem duplicar alerta/e-mail.
 - **Timezone** fixado em America/Sao_Paulo nos settings de cada workflow (cron do n8n Cloud roda em UTC por padrão).
 - **Kill switch:** o toggle Ativo/Inativo de cada workflow; o simulador fica DESLIGADO por padrão e é ativado só para demonstração.
 
@@ -69,15 +93,17 @@ Workflow pronto pra importar em **[`simulador-pedidos.json`](./simulador-pedidos
    virar um pedido nessa execução (senão retorna `[]` e a cadeia para ali);
    sorteia a plataforma (`ifood`/`rappi`/`proprio`, pesos do seed).
 3. **HTTP Request — "Consulta status da rede"** — `GET /api/status` no
-   servidor do app (header `x-webhook-secret`). O integrador NUNCA toca o
-   banco: o servidor responde quais unidades estão ativas, **abertas agora**
-   (pelo horário de funcionamento) e o cardápio disponível de cada uma
-   (respeitando itens pausados) — exatamente como uma vitrine pública.
+   servidor do app, autenticado via Credential Header Auth `Sabor e Cia`
+   (`x-webhook-secret`). O integrador NUNCA toca o banco: o servidor
+   responde quais unidades estão ativas, **abertas agora** (pelo horário de
+   funcionamento) e o cardápio disponível de cada uma (respeitando itens
+   pausados) — exatamente como uma vitrine pública.
 4. **Code — "Monta pedido pela vitrine"** — filtra unidades abertas com
    cardápio, sorteia a unidade, 1 a 4 itens distintos e quantidades (1–3).
    Rede fechada ⇒ nenhum pedido nasce fora do horário.
 5. **HTTP Request — "Envia pedido simulado"** — `POST` em
-   `{{ $env.APP_URL }}/api/pedidos/simular`, header `x-webhook-secret`.
+   `/api/pedidos/simular` (URL hardcoded no node — não é sensível), mesma
+   Credential Header Auth do passo 3.
 
 O endpoint (implementado em `src/server.ts` /
 `src/lib/order-simulator-handler.ts`) valida o secret, calcula o valor a
@@ -86,21 +112,6 @@ pedido com status `pendente` via RPC atômica (`rpc_inserir_pedido_simulado`).
 O pedido aparece **ao vivo** (Supabase Realtime) como popup no Dashboard da
 Unidade — o gerente aceita (`preparando`) ou recusa (`cancelado`, populando
 `log_cancelamentos` via trigger já existente).
-
-**Variáveis de ambiente do n8n** (`Settings → Environments` ou variáveis do
-workflow, nunca hardcoded nos nodes):
-
-| Variável                 | Valor                                                       |
-| ------------------------ | ----------------------------------------------------------- |
-| `SUPABASE_URL`           | mesma de `VITE_SUPABASE_URL` no `.env` do app               |
-| `SUPABASE_ANON_KEY`      | mesma de `VITE_SUPABASE_ANON_KEY` (pública, só lê cardápio) |
-| `APP_URL`                | URL do deploy (Vercel) ou túnel local (ex. ngrok) em dev    |
-| `ORDER_SIMULATOR_SECRET` | mesmo valor configurado no servidor do app                  |
-
-Se a instância do n8n não tiver acesso a variáveis de ambiente (planos sem
-`$env.*` liberado), a URL fica hardcoded no node (não é sensível) e o secret
-vai numa **Credential do tipo Header Auth**, não em variável — ver os nodes
-"Consulta status da rede" / "Envia pedido simulado" no JSON.
 
 O JSON foi validado como sintaticamente correto e revisado nó a nó contra o
 schema desta versão do n8n — a importação (`n8n import:workflow` ou
@@ -119,7 +130,8 @@ env var store, e um segundo CLI de deploy. Como o app já é servido via SSR
 com um servidor de verdade por trás (não é um SPA estático), essa rota
 "custa" a mesma infra que já existe. O trade-off: se o app cair, o endpoint
 cai junto (com uma Edge Function eles seriam independentes) — aceitável
-pro escopo do teste.
+pro escopo do teste. A mesma decisão vale pros endpoints de alerta de meta
+(`/api/alertas/metas-em-risco`, `/api/alertas/metas`).
 
 **Request**
 
@@ -162,4 +174,4 @@ x-webhook-secret: <ORDER_SIMULATOR_SECRET>
 ## Nesta pasta
 
 - `*.json` — workflows exportados do n8n (só os 2 realmente usados)
-- Documentação de configuração em produção (variáveis de ambiente, secret do webhook, error workflow, timezone, política de dedupe)
+- Documentação de configuração em produção (Credentials, error workflow, timezone, política de dedupe)
