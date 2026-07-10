@@ -36,11 +36,15 @@ export function NotificationsBell({ unidadeIdAtual }: { unidadeIdAtual?: number 
 
   const isGestor = session?.profile.role === "gestor_geral";
 
+  // Dentro de uma unidade, o gestor vê só as notificações DAQUELA
+  // unidade (todos os tipos) — inclusive horário, senão "Centro vai
+  // abrir" aparece como ruído enquanto ele está olhando o painel de
+  // outra unidade. Fora do modo unidade (rede), aí sim vê horário de
+  // todas juntas — não tem uma unidade em foco pra restringir.
   const visiveis = isGestor
-    ? notificacoes.filter(
-        (n) =>
-          TIPOS_HORARIO.has(n.tipo) || (unidadeIdAtual != null && n.unidade_id === unidadeIdAtual),
-      )
+    ? unidadeIdAtual != null
+      ? notificacoes.filter((n) => n.unidade_id === unidadeIdAtual)
+      : notificacoes.filter((n) => TIPOS_HORARIO.has(n.tipo))
     : notificacoes;
 
   function handleMarcarTodas() {

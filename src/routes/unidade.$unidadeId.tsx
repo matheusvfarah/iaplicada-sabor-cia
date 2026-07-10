@@ -19,9 +19,8 @@ import { UnitContext } from "@/lib/unit-context";
 import { useSession } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { CURRENCY_FULL } from "@/lib/currency";
-import { useNotificacoesCtx } from "@/lib/notificacoes-context";
-import { TIPOS_HORARIO } from "@/lib/use-notificacoes";
-import { useUnidades } from "@/lib/use-unidades";
+import { useUnidades, type UnidadeResumo } from "@/lib/use-unidades";
+import { minutosParaProximaVirada, useMinuteTick } from "@/lib/unidade-status";
 
 type Plataforma = "ifood" | "rappi" | "proprio";
 
@@ -94,20 +93,22 @@ function SemUnidadeVinculada() {
   );
 }
 
-// Precisa ser um componente separado, renderizado dentro de <AppShell>
-// (que monta o NotificacoesProvider) — chamar useNotificacoesCtx() no
-// próprio UnitLayout quebraria, já que o Provider só existe abaixo
-// dele na árvore, nunca acima.
-function HorarioBanner({ unidadeId }: { unidadeId: number }) {
-  const { notificacoes } = useNotificacoesCtx();
-  const proximaVirada = notificacoes.find(
-    (n) => TIPOS_HORARIO.has(n.tipo) && n.unidade_id === unidadeId,
-  );
-  if (!proximaVirada) return null;
+// Calculado ao vivo (não a partir da notificação salva no banco) —
+// a mensagem da notificação é um texto fixo do momento em que foi
+// gerada e nunca muda depois, então o banner ficava preso na primeira
+// contagem e nunca desaparecia sozinho quando a unidade abria/fechava
+// de verdade. useMinuteTick() recalcula a cada minuto e o banner some
+// sozinho assim que a virada passa de 30 min de distância.
+function HorarioBanner({ unidade }: { unidade: UnidadeResumo }) {
+  useMinuteTick();
+  const virada = minutosParaProximaVirada(unidade);
+  if (virada.minutos > 30) return null;
   return (
     <div className="flex items-center justify-center gap-1.5 border-b border-border bg-accent-tint px-4 py-1.5 text-center text-xs font-medium text-accent-tint-foreground">
       <Clock className="size-3.5 shrink-0" />
-      {proximaVirada.mensagem}
+      {virada.tipo === "fecha"
+        ? `${unidade.nome} fecha em ${virada.minutos} min`
+        : `${unidade.nome} abre em ${virada.minutos} min`}
     </div>
   );
 }
@@ -327,7 +328,7 @@ function UnitLayout() {
           </DialogContent>
         </Dialog>
 
-        <HorarioBanner unidadeId={unit.id} />
+        <HorarioBanner unidade={unidade!} />
         <UnitNav unidadeId={unit.id} />
         <div className="pb-16 sm:pb-0">
           <Outlet />
