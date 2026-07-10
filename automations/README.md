@@ -4,18 +4,18 @@ Dois workflows exportados como JSON (`Workflows → Import from File` no n8n). N
 
 | Workflow                                                | Gatilho                                   | Descrição                                                                                                                   |
 | -------------------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| [`alerta-meta-diaria.json`](./alerta-meta-diaria.json) | Schedule (08:00 America/Sao_Paulo)        | **Requisito do teste.** GET na API do app pra saber quais unidades estão em risco, diagnóstico via Claude, registra o alerta via POST na API e manda e-mail (fictício) ao gestor |
+| [`alerta-meta-diaria.json`](./alerta-meta-diaria.json) | Schedule (08:00 America/Sao_Paulo)        | **Requisito do teste.** GET na API do app pra saber quais unidades estão em risco, registra o alerta via POST na API e manda e-mail (fictício) ao gestor |
 | [`simulador-pedidos.json`](./simulador-pedidos.json)   | Schedule (curto, com sorteio de execução) | Simula pedidos chegando pela mesma API que um integrador real usaria (adicional, fora do requisito)                        |
 
 Avaliação ruim, atraso de pedido e cancelamento automático **não dependem de n8n** — rodam direto no banco via `pg_cron` (ver seção "Cron no banco" abaixo). Não há workflow n8n pra eles.
 
-## WF1 — `alerta-meta-diaria` (requisito + IA)
+## WF1 — `alerta-meta-diaria`
 
-Fluxo: **Schedule 08:00** → **HTTP GET** `/api/alertas/metas-em-risco` (retorna as unidades com `pct_meta < 0.6` e `dias_restantes <= 10`, já sem quem recebeu alerta esse mês — dedupe embutido na consulta) → **Code**: explode a lista em 1 item por unidade → **HTTP POST** à Claude API, gera diagnóstico de 4 linhas (situação, hipótese de causa, ação recomendada) a partir dos KPIs → **Code**: junta diagnóstico + KPIs (fallback factual se a Claude falhar) → **HTTP POST** `/api/alertas/metas` (registra o alerta; idempotente — se já tiver alerta da mesma unidade nesse mês, não duplica, só devolve `ja_registrado: true`) → **IF**: só segue se o registro foi novo → **E-mail fictício** ao gestor.
+Fluxo: **Schedule 08:00** → **HTTP GET** `/api/alertas/metas-em-risco` (retorna as unidades com `pct_meta < 0.6` e `dias_restantes <= 10`, já sem quem recebeu alerta esse mês — dedupe embutido na consulta) → **Code**: explode a lista em 1 item por unidade e monta a mensagem do alerta a partir dos KPIs (texto fixo, sem IA) → **HTTP POST** `/api/alertas/metas` (registra o alerta; idempotente — se já tiver alerta da mesma unidade nesse mês, não duplica, só devolve `ja_registrado: true`) → **IF**: só segue se o registro foi novo → **E-mail fictício** ao gestor.
 
 O n8n nunca toca o Postgres: as duas rotas HTTP (`GET /api/alertas/metas-em-risco`, `POST /api/alertas/metas`) rodam no servidor do app com a `service_role` key (`src/lib/alertas-metas-handler.ts`), igual ao padrão já usado pelo simulador de pedidos (`/api/status`, `/api/pedidos/simular`). A tabela `alertas` no banco continua sendo o destino final (aparece no painel `/rede/alertas` do gestor), só que quem escreve nela é o app, não o n8n.
 
-Racional: o requisito pede "envie um alerta"; entregamos o alerta com diagnóstico gerado por IA — coerente com o posicionamento da IAplicada. Se a Claude API falhar, o node "Prepara alerta" tem fallback com mensagem factual sem IA (o alerta nunca deixa de sair). O e-mail é fictício (endereço de teste hardcoded no node) — trocar pelo endereço real do gestor em produção.
+Racional: o requisito pede "envie um alerta" — entregamos exatamente isso, sem complexidade extra: uma mensagem factual montada a partir dos KPIs da unidade, sem chamada a LLM nem custo/latência de API externa. O e-mail é fictício (endereço de teste hardcoded no node) — trocar pelo endereço real do gestor em produção.
 
 **Demo:** o seed deixa a unidade Santana abaixo de 60% da meta. Como o gatilho de dias (`dias_restantes <= 10`) pode não bater no dia da avaliação, ajuste temporariamente o filtro em `rpc_metas_em_risco()` (`supabase/migrations/20260724000031_rpc_alertas_metas.sql`) para `dias_restantes <= 31` e rode o workflow manualmente (`Execute Workflow`), ou aguarde a janela real do mês.
 
@@ -63,7 +63,6 @@ Criar após importar (os JSONs referenciam por nome, nunca hardcoded, e nenhum s
 | Credencial | Tipo | Uso |
 | --- | --- | --- |
 | `Metas Alert Secret` | Header Auth (`x-webhook-secret: <METAS_ALERT_SECRET>`) | WF1 — GET e POST na API de alertas de meta |
-| `Anthropic API Key` | Header Auth (`x-api-key: <ANTHROPIC_API_KEY>`) | WF1 — diagnóstico via Claude |
 | `SMTP Sabor & Cia` | SMTP | WF1 — e-mail fictício ao gestor (qualquer SMTP de teste; Mailtrap serve pra demo) |
 | `Sabor e Cia` (Header Auth, `x-webhook-secret: <ORDER_SIMULATOR_SECRET>`) | Header Auth | WF3 — ver seção do simulador |
 

@@ -50,43 +50,13 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "anthropic-version", "value": "2023-06-01" },
-            { "name": "content-type", "value": "application/json" }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 350, messages: [{ role: 'user', content: 'Você é analista de operações de uma rede de dark kitchens. A unidade \"' + $json.unidade_nome + '\" está com receita acumulada de R$ ' + $json.receita_acumulada + ' contra meta mensal de R$ ' + $json.meta_receita + ' (' + $json.pct_meta + '% da meta), faltando ' + $json.dias_restantes + ' dias para o fim do mês. Escreva um diagnóstico de no máximo 4 linhas em português: 1 frase de situação, 1 hipótese provável de causa e 1 ação prática recomendada para os próximos dias. Tom direto, sem saudação, sem markdown.' }] }) }}",
-        "options": {}
-      },
-      "id": "d1d1d1d1-0004-4000-8000-000000000004",
-      "name": "Diagnóstico via Claude",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [60, 0],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "anthropic-api-key",
-          "name": "Anthropic API Key"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "// Junta o diagnóstico do Claude com os KPIs da unidade (mesmo\n// índice de item = mesma unidade, pareamento automático do n8n).\n// Se a Claude API falhar/vier vazia, cai no fallback factual — o\n// alerta nunca deixa de sair por causa da IA.\nconst kpis = $(\"Explode unidades em risco\").item.json;\nconst diagnostico = ($json.content?.[0]?.text || '').trim()\n  || `Unidade ${kpis.unidade_nome} em ${kpis.pct_meta}% da meta com ${kpis.dias_restantes} dias restantes.`;\nreturn { json: { ...kpis, diagnostico } };"
+        "jsCode": "// Texto fixo a partir dos KPIs — sem chamada de IA. Mensagem\n// direta pro gestor entender a situação de cada unidade em risco.\nconst kpis = $json;\nconst mensagem = `Unidade ${kpis.unidade_nome} está em ${kpis.pct_meta}% da meta mensal (R$ ${kpis.receita_acumulada} de R$ ${kpis.meta_receita}), com ${kpis.dias_restantes} dia(s) restante(s) no mês.`;\nreturn { json: { ...kpis, mensagem } };"
       },
       "id": "d1d1d1d1-0005-4000-8000-000000000005",
       "name": "Prepara alerta",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [280, 0]
+      "position": [60, 0]
     },
     {
       "parameters": {
@@ -96,14 +66,14 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ unidade_id: $json.unidade_id, mensagem: $json.diagnostico, payload: { meta_receita: $json.meta_receita, receita_acumulada: $json.receita_acumulada, pct_meta: $json.pct_meta, dias_restantes: $json.dias_restantes } }) }}",
+        "jsonBody": "={{ JSON.stringify({ unidade_id: $json.unidade_id, mensagem: $json.mensagem, payload: { meta_receita: $json.meta_receita, receita_acumulada: $json.receita_acumulada, pct_meta: $json.pct_meta, dias_restantes: $json.dias_restantes } }) }}",
         "options": {}
       },
       "id": "d1d1d1d1-0006-4000-8000-000000000006",
       "name": "Registra alerta",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [500, 0],
+      "position": [280, 0],
       "credentials": {
         "httpHeaderAuth": {
           "id": "metas-alert-secret",
@@ -130,21 +100,21 @@
       "name": "Alerta é novo?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [720, 0]
+      "position": [500, 0]
     },
     {
       "parameters": {
         "fromEmail": "alertas@saborecia.com.br",
         "toEmail": "alertas-teste@saborecia.com.br",
         "subject": "=[Sabor & Cia] Meta em risco — {{ $('Prepara alerta').item.json.unidade_nome }}",
-        "text": "={{ $('Prepara alerta').item.json.diagnostico }}\n\nReceita acumulada: R$ {{ $('Prepara alerta').item.json.receita_acumulada }}\nMeta do mês: R$ {{ $('Prepara alerta').item.json.meta_receita }} ({{ $('Prepara alerta').item.json.pct_meta }}%)\nDias restantes: {{ $('Prepara alerta').item.json.dias_restantes }}",
+        "text": "={{ $('Prepara alerta').item.json.mensagem }}\n\nReceita acumulada: R$ {{ $('Prepara alerta').item.json.receita_acumulada }}\nMeta do mês: R$ {{ $('Prepara alerta').item.json.meta_receita }} ({{ $('Prepara alerta').item.json.pct_meta }}%)\nDias restantes: {{ $('Prepara alerta').item.json.dias_restantes }}",
         "options": {}
       },
       "id": "d1d1d1d1-0008-4000-8000-000000000008",
       "name": "E-mail fictício ao gestor",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
-      "position": [940, 0],
+      "position": [720, 0],
       "credentials": {
         "smtp": {
           "name": "SMTP Sabor & Cia"
@@ -160,9 +130,6 @@
       "main": [[{ "node": "Explode unidades em risco", "type": "main", "index": 0 }]]
     },
     "Explode unidades em risco": {
-      "main": [[{ "node": "Diagnóstico via Claude", "type": "main", "index": 0 }]]
-    },
-    "Diagnóstico via Claude": {
       "main": [[{ "node": "Prepara alerta", "type": "main", "index": 0 }]]
     },
     "Prepara alerta": {
